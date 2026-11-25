@@ -4,8 +4,10 @@ namespace App\Modules\CustomFields\Services;
 
 use App\Modules\CustomFields\Models\CustomFieldDefinition;
 use Carbon\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
 
 class CustomFieldValidationService
@@ -51,6 +53,18 @@ class CustomFieldValidationService
 
         $definitions = $this->registry->forEntity($entityType, $organizationId);
 
+        return $this->validateDefinitions($definitions, $payload);
+    }
+
+    /**
+     * Validate and coerce a payload against an explicit collection of custom field definitions.
+     *
+     * @param  Collection<int, CustomFieldDefinition>  $definitions
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    public function validateDefinitions(Collection $definitions, array $payload, ?string $errorPrefix = null): array
+    {
         if ($definitions->isEmpty()) {
             return [];
         }
@@ -72,7 +86,19 @@ class CustomFieldValidationService
             }
         }
 
-        Validator::make($normalizedInput, $rules, [], $attributes)->validate();
+        $validator = Validator::make($normalizedInput, $rules, [], $attributes);
+        if ($validator->fails()) {
+            if ($errorPrefix === null) {
+                throw new ValidationException($validator);
+            }
+
+            $prefixedErrors = [];
+            foreach ($validator->errors()->messages() as $field => $messages) {
+                $prefixedErrors["{$errorPrefix}.{$field}"] = $messages;
+            }
+
+            throw ValidationException::withMessages($prefixedErrors);
+        }
 
         $validated = [];
         foreach ($definitions as $definition) {

@@ -23,10 +23,10 @@ enum TenantRole: string
     public function label(): string
     {
         return match ($this) {
-            self::OrgAdmin => 'Org Admin',
-            self::SalesManager => 'Sales Manager',
-            self::SalesRep => 'Sales Rep',
-            self::ReadOnly => 'Read Only',
+            self::OrgAdmin => 'Organization Admin',
+            self::SalesManager => 'Manager',
+            self::SalesRep => 'Sales Executive',
+            self::ReadOnly => 'Viewer',
         };
     }
 }

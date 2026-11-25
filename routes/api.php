@@ -1,5 +1,6 @@
 <?php
 
+use App\Modules\Communications\WhatsApp\Controllers\WhatsAppWebhookController;
 use App\Modules\Tenancy\Context\TenantContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -34,4 +35,9 @@ Route::middleware(['api.token'])->group(function (): void {
     })->name('api.me');
 });
 
-// Phase 4 placeholder: GET/POST /api/webhooks/whatsapp will be registered here.
+Route::get('/webhooks/whatsapp', [WhatsAppWebhookController::class, 'verify'])
+    ->name('api.webhooks.whatsapp.verify');
+
+Route::post('/webhooks/whatsapp', [WhatsAppWebhookController::class, 'receive'])
+    ->middleware('throttle:3000,1')
+    ->name('api.webhooks.whatsapp.receive');

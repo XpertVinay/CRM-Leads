@@ -151,11 +151,14 @@ class TrackingLinksAndRedirectTest extends TestCase
 
         Livewire::actingAs($tenantA['user'])
             ->test(TrackingLinkManager::class)
+            ->call('openCreateModal')
+            ->assertSet('showCreateModal', true)
             ->set('name', 'LW Campaign')
             ->set('code', 'lw-camp')
             ->set('destinationUrl', 'https://example.test/lw')
             ->set('channel', 'whatsapp')
             ->call('createLink')
+            ->assertSet('showCreateModal', false)
             ->assertHasNoErrors();
 
         $linkA = TrackingLink::query()->where('code', 'lw-camp')->firstOrFail();
@@ -170,5 +173,147 @@ class TrackingLinksAndRedirectTest extends TestCase
         Livewire::actingAs($tenantA['user'])
             ->test(TrackingLinkManager::class)
             ->call('deleteLink', $linkB->id);
+    }
+
+    public function test_livewire_tracking_link_manager_creates_inline_custom_fields_and_attaches_to_new_and_existing_links(): void
+    {
+        $tenant = $this->createOrgWithUser('org_admin');
+        $this->actingAsOrgMember($tenant['user'], $tenant['organization']);
+
+        // 1. Create inline Lead custom field while creating a new tracking link
+        $component = Livewire::actingAs($tenant['user'])
+            ->test(TrackingLinkManager::class)
+            ->set('name', 'Unified Flow Campaign')
+            ->set('code', 'unified-1')
+            ->set('channel', 'whatsapp')
+            ->call('openNewFieldForm', 'create')
+            ->set('newFieldLabel', 'Monthly Budget')
+            ->set('newFieldDataType', 'number')
+            ->set('newFieldIsRequired', true)
+            ->call('createInlineCustomField')
+            ->assertHasNoErrors();
+
+        $budgetField = \App\Modules\CustomFields\Models\CustomFieldDefinition::query()
+            ->where('field_key', 'monthly_budget')
+            ->firstOrFail();
+
+        $component->call('createLink')->assertHasNoErrors();
+
+        $link = TrackingLink::query()->where('code', 'unified-1')->firstOrFail();
+        $this->assertSame([(int) $budgetField->id], $link->capture_custom_field_ids);
+        $this->assertSame(url('/go/unified-1'), $link->destination_url);
+
+        // 2. Configure existing link's capture form, create & attach a second custom field
+        Livewire::actingAs($tenant['user'])
+            ->test(TrackingLinkManager::class)
+            ->call('startConfigure', $link->id)
+            ->set('editSlug', 'unified-offer')
+            ->set('editWhatsappNumber', '+91 98765 43210')
+            ->set('editWhatsappMessage', 'Hi {name}, budget: {custom.monthly_budget}')
+            ->call('openNewFieldForm', 'edit')
+            ->set('newFieldLabel', 'Preferred Plan')
+            ->set('newFieldDataType', 'select')
+            ->set('newFieldOptionsInput', 'Starter, Pro')
+            ->call('createInlineCustomField')
+            ->call('saveCaptureConfig')
+            ->assertHasNoErrors();
+
+        $planField = \App\Modules\CustomFields\Models\CustomFieldDefinition::query()
+            ->where('field_key', 'preferred_plan')
+            ->firstOrFail();
+
+        $freshLink = $link->fresh();
+        $this->assertSame('unified-offer', $freshLink->slug);
+        $this->assertSame('+91 98765 43210', $freshLink->whatsapp_number);
+        $this->assertSame([(int) $budgetField->id, (int) $planField->id], $freshLink->capture_custom_field_ids);
+    }
+
+    public function test_livewire_tracking_link_manager_updates_all_link_fields_and_validates_uniqueness(): void
+    {
+        $tenant = $this->createOrgWithUser(TenantRole::OrgAdmin->value);
+        $org = $tenant['organization'];
+        $rep = $this->createOrgWithUser(TenantRole::SalesRep->value);
+        $this->addUserToOrg($org, $rep['user'], TenantRole::SalesRep->value);
+        $readOnly = $this->createOrgWithUser(TenantRole::ReadOnly->value);
+        $this->addUserToOrg($org, $readOnly['user'], TenantRole::ReadOnly->value);
+
+        $existing = TrackingLink::create([
+            'organization_id' => $org->id,
+            'code' => 'taken-code',
+            'slug' => 'taken-slug',
+            'name' => 'Existing Link',
+            'destination_url' => 'https://example.test/existing',
+            'channel' => 'ad',
+        ]);
+
+        $link = TrackingLink::create([
+            'organization_id' => $org->id,
+            'code' => 'initial-code',
+            'name' => 'Initial Campaign',
+            'destination_url' => 'https://example.test/initial',
+            'channel' => 'ad',
+            'ad_spend' => 10,
+        ]);
+
+        $this->actingAsOrgMember($tenant['user'], $org);
+
+        // Duplicate code/slug should fail validation.
+        Livewire::actingAs($tenant['user'])
+            ->test(TrackingLinkManager::class)
+            ->call('startConfigure', $link->id)
+            ->set('editCode', $existing->code)
+            ->set('editSlug', $existing->slug)
+            ->call('saveCaptureConfig')
+            ->assertHasErrors(['editCode', 'editSlug']);
+
+        // Update all fields with valid values and blank destinationUrl (falls back to /go/{slug}).
+        Livewire::actingAs($tenant['user'])
+            ->test(TrackingLinkManager::class)
+            ->call('startConfigure', $link->id)
+            ->set('editName', 'Updated Campaign')
+            ->set('editCode', 'updated-code')
+            ->set('editSlug', 'updated-slug')
+            ->set('editChannel', 'social')
+            ->set('editDestinationUrl', '')
+            ->set('editUtmSource', 'instagram')
+            ->set('editUtmMedium', 'paid_social')
+            ->set('editUtmCampaign', 'winter_sale')
+            ->set('editAdSpend', '250.50')
+            ->set('editExpiresAt', '2030-01-15T12:30')
+            ->set('editAssignedUserId', (string) $rep['user']->id)
+            ->set('editAutoAssignRoundRobin', true)
+            ->call('saveCaptureConfig')
+            ->assertHasNoErrors();
+
+        $updated = $link->fresh();
+        $this->assertSame('Updated Campaign', $updated->name);
+        $this->assertSame('updated-code', $updated->code);
+        $this->assertSame('updated-slug', $updated->slug);
+        $this->assertSame('social', $updated->channel);
+        $this->assertSame(url('/go/updated-slug'), $updated->destination_url);
+        $this->assertSame('instagram', $updated->utm_source);
+        $this->assertSame('paid_social', $updated->utm_medium);
+        $this->assertSame('winter_sale', $updated->utm_campaign);
+        $this->assertSame('250.50', (string) $updated->ad_spend);
+        $this->assertSame('2030-01-15 12:30:00', $updated->expires_at?->format('Y-m-d H:i:s'));
+        $this->assertSame((int) $rep['user']->id, (int) $updated->assigned_user_id);
+        $this->assertTrue($updated->auto_assign_round_robin);
+
+        // Update destinationUrl to an explicit external URL.
+        Livewire::actingAs($tenant['user'])
+            ->test(TrackingLinkManager::class)
+            ->call('startConfigure', $link->id)
+            ->set('editDestinationUrl', 'https://example.test/custom-landing')
+            ->call('saveCaptureConfig')
+            ->assertHasNoErrors();
+
+        $this->assertSame('https://example.test/custom-landing', $link->fresh()->destination_url);
+
+        // Read-only user cannot open edit modal.
+        $this->actingAsOrgMember($readOnly['user'], $org);
+        Livewire::actingAs($readOnly['user'])
+            ->test(TrackingLinkManager::class)
+            ->call('startConfigure', $link->id)
+            ->assertForbidden();
     }
 }

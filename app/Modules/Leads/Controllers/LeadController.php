@@ -8,18 +8,22 @@ use App\Modules\CustomFields\Services\CustomFieldValidationService;
 use App\Modules\Leads\DTOs\LeadConversionData;
 use App\Modules\Leads\DTOs\LeadIngestionData;
 use App\Modules\Leads\Models\Lead;
+use App\Modules\Leads\Models\LeadStatusHistory;
 use App\Modules\Leads\Services\LeadAssignmentService;
 use App\Modules\Leads\Services\LeadConversionService;
 use App\Modules\Leads\Services\LeadIngestionService;
 use App\Modules\Pipeline\Models\Account;
+use App\Modules\Pipeline\Models\Activity;
 use App\Modules\Pipeline\Models\Pipeline;
 use App\Modules\Tenancy\Context\TenantContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class LeadController extends Controller
 {
@@ -49,6 +53,12 @@ class LeadController extends Controller
 
         $lead->load([
             'assignedUser',
+            'campaign',
+            'trackingLink',
+            'assignments.assignedTo',
+            'assignments.assignedBy',
+            'statusHistories.changedBy',
+            'followUps.assignedUser',
             'convertedContact',
             'convertedAccount',
             'convertedDeal.pipelineStage',
@@ -69,9 +79,35 @@ class LeadController extends Controller
     {
         Gate::authorize('viewAny', Lead::class);
 
+        $query = $this->buildFilteredQuery($request);
+        if ($query instanceof JsonResponse) {
+            return $query;
+        }
+
+        $perPage = $request->query('per_page');
+        if (is_string($perPage) && ctype_digit($perPage) && (int) $perPage > 0) {
+            $paginator = $query->paginate(min((int) $perPage, 100));
+
+            return response()->json([
+                'data' => $paginator->items(),
+                'meta' => [
+                    'current_page' => $paginator->currentPage(),
+                    'last_page' => $paginator->lastPage(),
+                    'per_page' => $paginator->perPage(),
+                    'total' => $paginator->total(),
+                ],
+            ]);
+        }
+
+        return response()->json([
+            'data' => $query->get(),
+        ]);
+    }
+
+    private function buildFilteredQuery(Request $request): \Illuminate\Database\Eloquent\Builder|JsonResponse
+    {
         $query = Lead::query()
-            ->with('assignedUser:id,name,email')
-            ->orderByDesc('id');
+            ->with(['assignedUser:id,name,email', 'campaign:id,name']);
 
         $type = $request->query('type');
         if (is_string($type) && $type !== '') {
@@ -89,16 +125,49 @@ class LeadController extends Controller
             $query->where('status', $status);
         }
 
+        $priority = $request->query('priority');
+        if (is_string($priority) && $priority !== '') {
+            if (! in_array($priority, Lead::PRIORITIES, true)) {
+                return response()->json(['message' => 'Invalid priority filter.'], 422);
+            }
+            $query->where('priority', $priority);
+        }
+
+        $campaignId = $request->query('campaign_id');
+        if (is_string($campaignId) && $campaignId !== '' && ctype_digit($campaignId)) {
+            $query->where('campaign_id', (int) $campaignId);
+        }
+
+        $source = $request->query('source');
+        if (is_string($source) && trim($source) !== '') {
+            $query->where('source', trim($source));
+        }
+
+        if ($request->boolean('unassigned')) {
+            $query->whereNull('assigned_user_id');
+        }
+
         $assignedUserId = $request->query('assigned_user_id');
         if (is_string($assignedUserId) && $assignedUserId !== '' && ctype_digit($assignedUserId)) {
             $query->where('assigned_user_id', (int) $assignedUserId);
+        }
+
+        $dateFrom = $request->query('date_from');
+        if (is_string($dateFrom) && $dateFrom !== '') {
+            $query->whereDate('created_at', '>=', $dateFrom);
+        }
+
+        $dateTo = $request->query('date_to');
+        if (is_string($dateTo) && $dateTo !== '') {
+            $query->whereDate('created_at', '<=', $dateTo);
         }
 
         $search = $request->query('search');
         if (is_string($search) && trim($search) !== '') {
             $needle = '%'.Str::lower(trim($search)).'%';
             $query->where(function ($q) use ($needle): void {
-                $q->whereRaw('LOWER(first_name) LIKE ?', [$needle])
+                $q->whereRaw('LOWER(COALESCE(lead_reference, \'\')) LIKE ?', [$needle])
+                    ->orWhereRaw('LOWER(first_name) LIKE ?', [$needle])
                     ->orWhereRaw('LOWER(COALESCE(last_name, \'\')) LIKE ?', [$needle])
                     ->orWhereRaw('LOWER(COALESCE(email, \'\')) LIKE ?', [$needle])
                     ->orWhereRaw('LOWER(COALESCE(phone, \'\')) LIKE ?', [$needle])
@@ -107,9 +176,12 @@ class LeadController extends Controller
             });
         }
 
-        return response()->json([
-            'data' => $query->get(),
-        ]);
+        $allowedSorts = ['id', 'created_at', 'first_name', 'status', 'priority', 'source'];
+        $sortBy = in_array($request->query('sort_by'), $allowedSorts, true) ? (string) $request->query('sort_by') : 'id';
+        $sortDir = strtolower((string) $request->query('sort_dir')) === 'asc' ? 'asc' : 'desc';
+        $query->orderBy($sortBy, $sortDir);
+
+        return $query;
     }
 
     public function showJson(Lead $lead): JsonResponse
@@ -176,7 +248,8 @@ class LeadController extends Controller
 
         $validated = $request->validate([
             'type' => ['sometimes', 'required', 'string', Rule::in(Lead::TYPES)],
-            'status' => ['sometimes', 'required', 'string', Rule::in(['new', 'contacted', 'qualified', 'unqualified'])],
+            'status' => ['sometimes', 'required', 'string', Rule::in(array_diff(Lead::STATUSES, ['converted']))],
+            'priority' => ['sometimes', 'required', 'string', Rule::in(Lead::PRIORITIES)],
             'first_name' => ['sometimes', 'required', 'string', 'max:100'],
             'last_name' => ['nullable', 'string', 'max:100'],
             'email' => ['nullable', 'email', 'max:191'],
@@ -190,7 +263,9 @@ class LeadController extends Controller
             'job_title' => ['nullable', 'string', 'max:100'],
             'employee_count' => ['nullable', 'integer', 'min:1', 'max:10000000'],
             'location' => ['nullable', 'string', 'max:191'],
+            'requirement' => ['nullable', 'string', 'max:2000'],
             'source' => ['nullable', 'string', 'max:100'],
+            'status_reason' => ['nullable', 'string', 'max:255'],
             'custom_fields' => ['nullable', 'array'],
         ]);
 
@@ -207,7 +282,39 @@ class LeadController extends Controller
             );
         }
 
-        $lead->update($validated);
+        $oldStatus = $lead->status;
+        $statusReason = $validated['status_reason'] ?? null;
+        unset($validated['status_reason']);
+
+        DB::transaction(function () use ($lead, $validated, $oldStatus, $statusReason, $request): void {
+            $lead->update($validated);
+
+            if (isset($validated['status']) && $validated['status'] !== $oldStatus) {
+                LeadStatusHistory::create([
+                    'organization_id' => (int) $lead->organization_id,
+                    'lead_id' => (int) $lead->id,
+                    'from_status' => $oldStatus,
+                    'to_status' => $validated['status'],
+                    'changed_by_user_id' => $request->user()?->id,
+                    'reason' => $statusReason,
+                    'changed_at' => now('UTC'),
+                ]);
+
+                Activity::create([
+                    'organization_id' => (int) $lead->organization_id,
+                    'user_id' => $request->user()?->id,
+                    'activitable_type' => Lead::class,
+                    'activitable_id' => (int) $lead->id,
+                    'action' => 'status_change',
+                    'description' => sprintf('Status changed from %s to %s', $oldStatus, $validated['status']),
+                    'metadata' => [
+                        'from_status' => $oldStatus,
+                        'to_status' => $validated['status'],
+                        'reason' => $statusReason,
+                    ],
+                ]);
+            }
+        });
 
         return response()->json([
             'message' => 'Lead updated.',
@@ -278,6 +385,96 @@ class LeadController extends Controller
         return response()->json([
             'message' => 'Lead converted successfully.',
             'data' => $result,
+        ]);
+    }
+
+    public function bulkAction(Request $request, LeadAssignmentService $assignmentService): JsonResponse
+    {
+        Gate::authorize('viewAny', Lead::class);
+
+        $validated = $request->validate([
+            'lead_ids' => ['required', 'array', 'min:1', 'max:200'],
+            'lead_ids.*' => ['integer'],
+            'action' => ['required', 'string', Rule::in(['assign', 'status', 'priority'])],
+            'assigned_user_id' => ['nullable', 'integer'],
+            'status' => ['nullable', 'string', Rule::in(array_diff(Lead::STATUSES, ['converted']))],
+            'priority' => ['nullable', 'string', Rule::in(Lead::PRIORITIES)],
+        ]);
+
+        $leads = Lead::query()->whereIn('id', $validated['lead_ids'])->get();
+        $updatedCount = 0;
+
+        foreach ($leads as $lead) {
+            if ($validated['action'] === 'assign') {
+                Gate::authorize('assign', $lead);
+                $assignmentService->assign($lead, isset($validated['assigned_user_id']) ? (int) $validated['assigned_user_id'] : null);
+                $updatedCount++;
+            } elseif ($validated['action'] === 'status' && ! empty($validated['status'])) {
+                Gate::authorize('update', $lead);
+                $oldStatus = $lead->status;
+                if ($oldStatus !== $validated['status']) {
+                    DB::transaction(function () use ($lead, $oldStatus, $validated, $request): void {
+                        $lead->update(['status' => $validated['status']]);
+                        LeadStatusHistory::create([
+                            'organization_id' => (int) $lead->organization_id,
+                            'lead_id' => (int) $lead->id,
+                            'from_status' => $oldStatus,
+                            'to_status' => $validated['status'],
+                            'changed_by_user_id' => $request->user()?->id,
+                            'changed_at' => now('UTC'),
+                        ]);
+                    });
+                }
+                $updatedCount++;
+            } elseif ($validated['action'] === 'priority' && ! empty($validated['priority'])) {
+                Gate::authorize('update', $lead);
+                $lead->update(['priority' => $validated['priority']]);
+                $updatedCount++;
+            }
+        }
+
+        return response()->json([
+            'message' => sprintf('%d lead(s) updated.', $updatedCount),
+            'updated_count' => $updatedCount,
+        ]);
+    }
+
+    public function exportCsv(Request $request): StreamedResponse|JsonResponse
+    {
+        Gate::authorize('viewAny', Lead::class);
+
+        $query = $this->buildFilteredQuery($request);
+        if ($query instanceof JsonResponse) {
+            return $query;
+        }
+
+        $leads = $query->get();
+
+        return response()->streamDownload(function () use ($leads): void {
+            $handle = fopen('php://output', 'w');
+            fputcsv($handle, [
+                'Reference', 'Name', 'Phone', 'Email', 'Company', 'Type', 'Status', 'Priority', 'Source', 'Assigned To', 'Created At',
+            ]);
+
+            foreach ($leads as $lead) {
+                fputcsv($handle, [
+                    $lead->lead_reference ?? '',
+                    $lead->fullName(),
+                    $lead->phone ?? '',
+                    $lead->email ?? '',
+                    $lead->company_name ?? '',
+                    $lead->type,
+                    $lead->status,
+                    $lead->priority ?? 'medium',
+                    $lead->source,
+                    $lead->assignedUser?->name ?? 'Unassigned',
+                    $lead->created_at?->toIso8601String() ?? '',
+                ]);
+            }
+
+            fclose($handle);
+        }, 'leads-export-'.now()->format('Ymd-His').'.csv', [
+            'Content-Type' => 'text/csv; charset=UTF-8',
         ]);
     }
 }

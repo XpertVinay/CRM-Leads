@@ -5,10 +5,12 @@ namespace App\Models;
 use App\Modules\CustomFields\Models\CustomFieldDefinition;
 use App\Modules\Tenancy\Models\ApiToken;
 use App\Modules\Tenancy\Models\OrganizationInvitation;
+use App\Modules\Tenancy\Models\OrganizationSetting;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
 
@@ -90,6 +92,11 @@ class Organization extends Model
     public function customFieldDefinitions(): HasMany
     {
         return $this->hasMany(CustomFieldDefinition::class, 'organization_id');
+    }
+
+    public function setting(): HasOne
+    {
+        return $this->hasOne(OrganizationSetting::class, 'organization_id');
     }
 
     public function isActive(): bool

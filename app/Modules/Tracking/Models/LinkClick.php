@@ -19,8 +19,13 @@ class LinkClick extends Model
         'tracking_link_id',
         'click_token',
         'ip_hash',
+        'ip_address',
+        'visitor_hash',
         'user_agent',
+        'device',
+        'browser',
         'referer',
+        'landing_page',
         'clicked_at',
     ];
 
