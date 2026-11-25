@@ -1,17 +1,17 @@
 @extends('layouts.crm')
 
-@section('title', 'Sign In — CRM')
+@section('title', __('Sign In') . ' — CRM')
 
 @section('content')
     <div style="margin-bottom: 1.5rem;">
-        <h1 class="crm-page-title" style="font-size: 1.5rem;">Welcome back</h1>
-        <p class="crm-muted" style="margin: 0;">Access your organization CRM workspace.</p>
+        <h1 class="crm-page-title" style="font-size: 1.5rem;">{{ __('Welcome back') }}</h1>
+        <p class="crm-muted" style="margin: 0;">{{ __('Access your organization CRM workspace.') }}</p>
     </div>
 
     <form method="POST" action="{{ route('login') }}">
         @csrf
         <div class="crm-form-group">
-            <label class="crm-label" for="email">Email</label>
+            <label class="crm-label" for="email">{{ __('Email') }}</label>
             <div class="crm-input-wrap">
                 <span class="material-symbols-outlined crm-input-icon">mail</span>
                 <input id="email" class="crm-input" type="email" name="email" value="{{ old('email') }}" placeholder="you@example.com" required autofocus>
@@ -19,11 +19,11 @@
         </div>
 
         <div class="crm-form-group">
-            <label class="crm-label" for="password">Password</label>
+            <label class="crm-label" for="password">{{ __('Password') }}</label>
             <div class="crm-input-wrap">
                 <span class="material-symbols-outlined crm-input-icon">lock</span>
-                <input id="password" class="crm-input" type="password" name="password" placeholder="Enter your password" required>
-                <button type="button" class="crm-input-action" data-toggle-password="#password" aria-label="Toggle password visibility">
+                <input id="password" class="crm-input" type="password" name="password" placeholder="{{ __('Enter your password') }}" required>
+                <button type="button" class="crm-input-action" data-toggle-password="#password" aria-label="{{ __('Toggle password visibility') }}">
                     <span class="material-symbols-outlined" style="font-size: 20px;">visibility</span>
                 </button>
             </div>
@@ -32,22 +32,22 @@
         <div class="crm-between crm-mb-2" style="padding-top: 0.2rem;">
             <label class="crm-flex" style="cursor: pointer;">
                 <input type="checkbox" name="remember" value="1" style="accent-color: var(--crm-primary-container); width: 16px; height: 16px;">
-                <span class="crm-muted" style="font-size: 0.82rem;">Remember me</span>
+                <span class="crm-muted" style="font-size: 0.82rem;">{{ __('Remember me') }}</span>
             </label>
             <span class="crm-ssl-pill">
                 <span class="material-symbols-outlined" style="font-size: 14px; color: var(--crm-primary); font-variation-settings: 'FILL' 1;">verified_user</span>
-                256-bit SSL
+                {{ __('256-bit SSL') }}
             </span>
         </div>
 
         <button type="submit" class="crm-btn crm-btn-primary crm-btn-lg crm-btn-block">
-            <span>Sign In</span>
+            <span>{{ __('Sign In') }}</span>
             <span class="material-symbols-outlined" style="font-size: 19px;">arrow_forward</span>
         </button>
     </form>
 
     <div class="crm-auth-divider">
-        <span>or continue with</span>
+        <span>{{ __('or continue with') }}</span>
     </div>
 
     <div class="crm-social-grid">
@@ -69,7 +69,7 @@
     </div>
 
     <div style="margin-top: 1.35rem; text-align: center;">
-        <span class="crm-muted">Don't have an account?</span>
-        <a href="{{ route('register') }}" style="font-weight: 600; margin-left: 0.25rem;">Create Organization</a>
+        <span class="crm-muted">{{ __("Don't have an account?") }}</span>
+        <a href="{{ route('register') }}" style="font-weight: 600; margin-left: 0.25rem;">{{ __('Create Organization') }}</a>
     </div>
 @endsection

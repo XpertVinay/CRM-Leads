@@ -1,24 +1,24 @@
 @extends('layouts.crm')
 
-@section('title', 'Register — CRM')
+@section('title', __('Create Account & Organization') . ' — CRM')
 @section('auth_width_class', 'crm-auth-wide')
 
 @section('content')
     <div style="text-align: center; margin-bottom: 1.5rem;">
         <div class="crm-pill-badge">
             <span class="material-symbols-outlined" style="font-size: 16px; font-variation-settings: 'FILL' 1;">bolt</span>
-            <span>Get started in 30 seconds</span>
+            <span>{{ __('Get started in 30 seconds') }}</span>
         </div>
-        <h1 class="crm-page-title" style="font-size: 1.65rem;">Create Account &amp; Organization</h1>
-        <p class="crm-muted" style="margin: 0;">Provision a new tenant workspace as Org Admin.</p>
+        <h1 class="crm-page-title" style="font-size: 1.65rem;">{{ __('Create Account & Organization') }}</h1>
+        <p class="crm-muted" style="margin: 0;">{{ __('Provision a new tenant workspace as Org Admin.') }}</p>
     </div>
 
     <form method="POST" action="{{ route('register') }}">
         @csrf
-        <div class="crm-section-label" style="margin-top: 0;">Account Details</div>
+        <div class="crm-section-label" style="margin-top: 0;">{{ __('Account Details') }}</div>
 
         <div class="crm-form-group">
-            <label class="crm-label" for="name">Full Name</label>
+            <label class="crm-label" for="name">{{ __('Full Name') }}</label>
             <div class="crm-input-wrap">
                 <span class="material-symbols-outlined crm-input-icon">person</span>
                 <input id="name" class="crm-input" type="text" name="name" value="{{ old('name') }}" placeholder="Alex Morgan" required>
@@ -27,7 +27,7 @@
 
         <div class="crm-form-row">
             <div class="crm-form-group">
-                <label class="crm-label" for="email">Work Email</label>
+                <label class="crm-label" for="email">{{ __('Work Email') }}</label>
                 <div class="crm-input-wrap">
                     <span class="material-symbols-outlined crm-input-icon">mail</span>
                     <input id="email" class="crm-input" type="email" name="email" value="{{ old('email') }}" placeholder="alex@example.com" required>
@@ -35,7 +35,7 @@
             </div>
 
             <div class="crm-form-group">
-                <label class="crm-label" for="phone">Phone (Optional)</label>
+                <label class="crm-label" for="phone">{{ __('Phone (Optional)') }}</label>
                 <div class="crm-input-wrap">
                     <span class="material-symbols-outlined crm-input-icon">call</span>
                     <input id="phone" class="crm-input" type="text" name="phone" value="{{ old('phone') }}" placeholder="+1 555 0100">
@@ -43,11 +43,11 @@
             </div>
         </div>
 
-        <div class="crm-section-label">Organization Workspace</div>
+        <div class="crm-section-label">{{ __('Organization Workspace') }}</div>
 
         <div class="crm-form-row">
             <div class="crm-form-group">
-                <label class="crm-label" for="organization_name">Organization Name</label>
+                <label class="crm-label" for="organization_name">{{ __('Organization Name') }}</label>
                 <div class="crm-input-wrap">
                     <span class="material-symbols-outlined crm-input-icon">corporate_fare</span>
                     <input id="organization_name" class="crm-input" type="text" name="organization_name" value="{{ old('organization_name') }}" placeholder="Acme Corp" required>
@@ -55,43 +55,43 @@
             </div>
 
             <div class="crm-form-group">
-                <label class="crm-label" for="organization_slug">Organization Slug (Optional)</label>
+                <label class="crm-label" for="organization_slug">{{ __('Organization Slug (Optional)') }}</label>
                 <input id="organization_slug" class="crm-input" type="text" name="organization_slug" value="{{ old('organization_slug') }}" placeholder="e.g. acme-corp">
             </div>
         </div>
 
         <div class="crm-form-row">
             <div class="crm-form-group">
-                <label class="crm-label" for="registration_identifier">Registration Identifier (Optional)</label>
+                <label class="crm-label" for="registration_identifier">{{ __('Registration Identifier (Optional)') }}</label>
                 <input id="registration_identifier" class="crm-input" type="text" name="registration_identifier" value="{{ old('registration_identifier') }}">
             </div>
 
             <div class="crm-form-group">
-                <label class="crm-label" for="primary_contact_email">Primary Contact Email (Optional)</label>
+                <label class="crm-label" for="primary_contact_email">{{ __('Primary Contact Email (Optional)') }}</label>
                 <input id="primary_contact_email" class="crm-input" type="email" name="primary_contact_email" value="{{ old('primary_contact_email') }}">
             </div>
         </div>
 
         <div class="crm-form-row">
             <div class="crm-form-group">
-                <label class="crm-label" for="timezone">Timezone (Optional)</label>
+                <label class="crm-label" for="timezone">{{ __('Timezone (Optional)') }}</label>
                 <input id="timezone" class="crm-input" type="text" name="timezone" value="{{ old('timezone') }}" placeholder="UTC">
             </div>
 
             <div class="crm-form-group">
-                <label class="crm-label" for="currency">Currency (Optional)</label>
+                <label class="crm-label" for="currency">{{ __('Currency (Optional)') }}</label>
                 <input id="currency" class="crm-input" type="text" name="currency" value="{{ old('currency') }}" placeholder="USD" maxlength="3">
             </div>
         </div>
 
-        <div class="crm-section-label">Security</div>
+        <div class="crm-section-label">{{ __('Security') }}</div>
 
         <div class="crm-form-group">
-            <label class="crm-label" for="password">Password</label>
+            <label class="crm-label" for="password">{{ __('Password') }}</label>
             <div class="crm-input-wrap">
                 <span class="material-symbols-outlined crm-input-icon">lock</span>
-                <input id="password" class="crm-input" type="password" name="password" placeholder="Create a password" data-password-strength="#crm-reg-strength" required>
-                <button type="button" class="crm-input-action" data-toggle-password="#password" aria-label="Toggle password visibility">
+                <input id="password" class="crm-input" type="password" name="password" placeholder="{{ __('Create a password') }}" data-password-strength="#crm-reg-strength" required>
+                <button type="button" class="crm-input-action" data-toggle-password="#password" aria-label="{{ __('Toggle password visibility') }}">
                     <span class="material-symbols-outlined" style="font-size: 20px;">visibility</span>
                 </button>
             </div>

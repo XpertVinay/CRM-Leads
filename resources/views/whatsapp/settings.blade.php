@@ -56,7 +56,12 @@
 </div>
 
 <div class="crm-card" style="margin-top:1rem;">
-    <h3>Synced Templates ({{ $templates->count() }})</h3>
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:0.75rem;">
+        <h3 style="margin:0;">Synced Templates ({{ $templates->count() }})</h3>
+        @if(auth()->user()?->isSuperadmin() && $account)
+            <button type="button" class="crm-btn crm-btn-primary crm-btn-sm" onclick="CRM.openWaTemplateModal()">+ New Template</button>
+        @endif
+    </div>
     <table class="crm-table">
         <thead>
             <tr>
@@ -65,6 +70,9 @@
                 <th>Category</th>
                 <th>Status</th>
                 <th>Body</th>
+                @if(auth()->user()?->isSuperadmin())
+                    <th>Actions</th>
+                @endif
             </tr>
         </thead>
         <tbody>
@@ -75,13 +83,67 @@
                     <td>{{ $tpl->category }}</td>
                     <td><span class="crm-badge">{{ $tpl->meta_status }}</span></td>
                     <td>{{ $tpl->body_text }}</td>
+                    @if(auth()->user()?->isSuperadmin())
+                        <td>
+                            <button type="button" class="crm-btn crm-btn-secondary crm-btn-sm" onclick="CRM.openWaTemplateModal({{ $tpl->id }}, @js($tpl->name), @js($tpl->language), @js($tpl->category), @js($tpl->meta_status), @js($tpl->body_text))">Edit</button>
+                            <button type="button" class="crm-btn crm-btn-danger crm-btn-sm" onclick="CRM.deleteWaTemplate({{ $tpl->id }})">Delete</button>
+                        </td>
+                    @endif
                 </tr>
             @empty
-                <tr><td colspan="5" class="crm-muted">No templates synced yet.</td></tr>
+                <tr><td colspan="{{ auth()->user()?->isSuperadmin() ? 6 : 5 }}" class="crm-muted">No templates synced yet.</td></tr>
             @endforelse
         </tbody>
     </table>
 </div>
+
+@if(auth()->user()?->isSuperadmin())
+<div id="wa-template-modal" class="crm-modal-backdrop">
+    <div class="crm-modal">
+        <div class="crm-modal-header">
+            <h2 id="wa-tpl-modal-title">New WhatsApp Template</h2>
+            <button type="button" class="crm-modal-close" onclick="CRM.closeModal('wa-template-modal')">&times;</button>
+        </div>
+        <form id="wa-template-form" onsubmit="return CRM.submitWaTemplate(event)">
+            <input type="hidden" id="wa-tpl-id">
+            <div class="crm-form-group">
+                <label class="crm-label">Template Name *</label>
+                <input type="text" id="wa-tpl-name" required class="crm-input" placeholder="welcome_message">
+            </div>
+            <div class="crm-form-row">
+                <div class="crm-form-group">
+                    <label class="crm-label">Language *</label>
+                    <input type="text" id="wa-tpl-lang" required class="crm-input" value="en_IN">
+                </div>
+                <div class="crm-form-group">
+                    <label class="crm-label">Category *</label>
+                    <select id="wa-tpl-category" class="crm-select">
+                        <option value="utility">Utility</option>
+                        <option value="marketing">Marketing</option>
+                        <option value="authentication">Authentication</option>
+                    </select>
+                </div>
+            </div>
+            <div class="crm-form-group">
+                <label class="crm-label">Status</label>
+                <select id="wa-tpl-status" class="crm-select">
+                    <option value="APPROVED">APPROVED</option>
+                    <option value="PENDING">PENDING</option>
+                    <option value="REJECTED">REJECTED</option>
+                </select>
+            </div>
+            <div class="crm-form-group">
+                <label class="crm-label">Body Text *</label>
+                <textarea id="wa-tpl-body" rows="3" required class="crm-input"></textarea>
+            </div>
+            <div class="crm-modal-footer">
+                <button type="button" class="crm-btn crm-btn-secondary" onclick="CRM.closeModal('wa-template-modal')">Cancel</button>
+                <button type="submit" class="crm-btn crm-btn-primary">Save</button>
+            </div>
+        </form>
+    </div>
+</div>
+@endif
 
 @push('scripts')
 <script>
@@ -113,6 +175,46 @@ CRM.disconnectWa = function() {
         url: '{{ route("ajax.whatsapp.disconnect") }}',
         method: 'DELETE',
         success: function() { location.reload(); }
+    });
+};
+CRM.openWaTemplateModal = function(id, name, lang, category, status, body) {
+    document.getElementById('wa-tpl-id').value = id || '';
+    document.getElementById('wa-tpl-modal-title').textContent = id ? 'Edit WhatsApp Template' : 'New WhatsApp Template';
+    document.getElementById('wa-tpl-name').value = name || '';
+    document.getElementById('wa-tpl-lang').value = lang || 'en_IN';
+    document.getElementById('wa-tpl-category').value = category || 'utility';
+    document.getElementById('wa-tpl-status').value = status || 'APPROVED';
+    document.getElementById('wa-tpl-body').value = body || '';
+    CRM.modal('wa-template-modal');
+};
+CRM.submitWaTemplate = function(e) {
+    e.preventDefault();
+    var id = document.getElementById('wa-tpl-id').value;
+    $.ajax({
+        url: id ? '/ajax/whatsapp/templates/' + id : '{{ route("ajax.whatsapp.templates.store") }}',
+        method: id ? 'PATCH' : 'POST',
+        data: JSON.stringify({
+            name: document.getElementById('wa-tpl-name').value,
+            language: document.getElementById('wa-tpl-lang').value,
+            category: document.getElementById('wa-tpl-category').value,
+            meta_status: document.getElementById('wa-tpl-status').value,
+            body_text: document.getElementById('wa-tpl-body').value
+        }),
+        contentType: 'application/json',
+        headers: { 'X-CSRF-TOKEN': $('meta[name=csrf-token]').attr('content') },
+        success: function() { location.reload(); },
+        error: function(xhr) { CRM.flash(xhr.responseJSON?.message || 'Error saving template.', 'error'); }
+    });
+    return false;
+};
+CRM.deleteWaTemplate = function(id) {
+    if (!confirm('Delete this template?')) return;
+    $.ajax({
+        url: '/ajax/whatsapp/templates/' + id,
+        method: 'DELETE',
+        headers: { 'X-CSRF-TOKEN': $('meta[name=csrf-token]').attr('content') },
+        success: function() { location.reload(); },
+        error: function(xhr) { CRM.flash(xhr.responseJSON?.message || 'Error deleting template.', 'error'); }
     });
 };
 </script>

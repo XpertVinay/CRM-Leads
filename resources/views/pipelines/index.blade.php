@@ -59,6 +59,30 @@
     </div>
 </div>
 
+<!-- Edit Pipeline Modal -->
+<div id="edit-pipeline-modal" class="crm-modal-backdrop">
+    <div class="crm-modal">
+        <div class="crm-modal-header">
+            <h2>Edit Pipeline</h2>
+            <button class="crm-modal-close" onclick="CRM.closeModal('edit-pipeline-modal')">&times;</button>
+        </div>
+        <form id="edit-pipeline-form" onsubmit="return CRM.submitEditPipelineForm(event)">
+            <input type="hidden" id="edit-pipeline-id">
+            <div class="crm-form-group">
+                <label for="edit-pipeline-name">Pipeline Name *</label>
+                <input type="text" id="edit-pipeline-name" name="name" required class="crm-input">
+            </div>
+            <div class="crm-form-group">
+                <label><input type="checkbox" id="edit-pipeline-default" name="is_default" value="1"> Default Pipeline</label>
+            </div>
+            <div class="crm-modal-footer">
+                <button type="button" class="crm-btn crm-btn-secondary" onclick="CRM.closeModal('edit-pipeline-modal')">Cancel</button>
+                <button type="submit" class="crm-btn crm-btn-primary">Save</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 @push('scripts')
 <script>
 CRM.loadPipelines = function() {
@@ -72,7 +96,10 @@ CRM.loadPipelines = function() {
                 '<td>' + (p.is_default ? '✓' : '') + '</td>' +
                 '<td>' + (p.stages ? p.stages.length : 0) + '</td>' +
                 '<td>' + (p.deals_count || 0) + '</td>' +
-                '<td><button class="crm-btn crm-btn-sm crm-btn-danger" onclick="CRM.deletePipeline(' + p.id + ')">Delete</button></td>' +
+                '<td>' +
+                    '<button class="crm-btn crm-btn-sm crm-btn-secondary" onclick="CRM.openEditPipeline(' + p.id + ', ' + JSON.stringify(p.name) + ', ' + (p.is_default ? 'true' : 'false') + ')">Edit</button> ' +
+                    '<button class="crm-btn crm-btn-sm crm-btn-danger" onclick="CRM.deletePipeline(' + p.id + ')">Delete</button>' +
+                '</td>' +
                 '</tr>'
             );
         });
@@ -115,6 +142,35 @@ CRM.submitPipelineForm = function(e) {
             CRM.closeModal('create-pipeline-modal');
             form.reset();
             CRM.flash('Pipeline created.', 'success');
+            CRM.loadPipelines();
+        },
+        error: function(xhr) { CRM.flash(xhr.responseJSON?.message || 'Error.', 'error'); }
+    });
+    return false;
+};
+
+CRM.openEditPipeline = function(id, name, isDefault) {
+    document.getElementById('edit-pipeline-id').value = id;
+    document.getElementById('edit-pipeline-name').value = name || '';
+    document.getElementById('edit-pipeline-default').checked = !!isDefault;
+    CRM.modal('edit-pipeline-modal');
+};
+
+CRM.submitEditPipelineForm = function(e) {
+    e.preventDefault();
+    var id = document.getElementById('edit-pipeline-id').value;
+    $.ajax({
+        url: '/ajax/pipelines/' + id,
+        method: 'PATCH',
+        data: JSON.stringify({
+            name: document.getElementById('edit-pipeline-name').value,
+            is_default: document.getElementById('edit-pipeline-default').checked
+        }),
+        contentType: 'application/json',
+        headers: { 'X-CSRF-TOKEN': $('meta[name=csrf-token]').attr('content') },
+        success: function() {
+            CRM.closeModal('edit-pipeline-modal');
+            CRM.flash('Pipeline updated.', 'success');
             CRM.loadPipelines();
         },
         error: function(xhr) { CRM.flash(xhr.responseJSON?.message || 'Error.', 'error'); }

@@ -1,19 +1,19 @@
 <div>
     <div class="crm-card">
         <div class="crm-card-header">
-            <h2 class="crm-card-title">Lead Inbox</h2>
+            <h2 class="crm-card-title">{{ __('Leads') }}</h2>
             <div class="crm-flex">
-                <input type="text" class="crm-input" wire:model.live.debounce.300ms="search" placeholder="Search name, email, company, location..." style="width:240px;">
+                <input type="text" class="crm-input" wire:model.live.debounce.300ms="search" placeholder="{{ __('Search leads...') }}" style="width:240px;">
                 <select class="crm-select" wire:model.live="typeFilter" style="width:auto;">
-                    <option value="">All Modes</option>
+                    <option value="">{{ __('All Statuses') }}</option>
                     @foreach($types as $type)
                         <option value="{{ $type }}">{{ $type }}</option>
                     @endforeach
                 </select>
                 <select class="crm-select" wire:model.live="statusFilter" style="width:auto;">
-                    <option value="">All Statuses</option>
+                    <option value="">{{ __('All Statuses') }}</option>
                     @foreach($statuses as $status)
-                        <option value="{{ $status }}">{{ ucfirst($status) }}</option>
+                        <option value="{{ $status }}">{{ __(ucfirst($status)) }}</option>
                     @endforeach
                 </select>
             </div>
@@ -27,13 +27,13 @@
             <table class="crm-table">
                 <thead>
                     <tr>
-                        <th>Name</th>
+                        <th>{{ __('Name') }}</th>
                         <th>Mode</th>
-                        <th>Company / Location</th>
-                        <th>Contact</th>
-                        <th>Status</th>
-                        <th>Owner</th>
-                        <th>Actions</th>
+                        <th>{{ __('Company Name') }}</th>
+                        <th>{{ __('Phone') }}</th>
+                        <th>{{ __('Status') }}</th>
+                        <th>{{ __('Owner') }}</th>
+                        <th>{{ __('Actions') }}</th>
                     </tr>
                 </thead>
                 <tbody>

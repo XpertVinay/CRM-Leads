@@ -1,6 +1,6 @@
 @extends('layouts.crm')
 
-@section('title', 'Dashboard — ' . $organization->name)
+@section('title', __('Dashboard') . ' — ' . $organization->name)
 
 @section('content')
     <div class="crm-page-header">
@@ -11,19 +11,19 @@
                 </span>
                 <span class="crm-badge crm-badge-{{ $role }}">{{ $role }}</span>
             </div>
-            <h1 class="crm-page-title">WhatsApp B2B CRM Dashboard</h1>
+            <h1 class="crm-page-title">{{ __('WhatsApp B2B CRM Dashboard') }}</h1>
             <p class="crm-muted" style="margin: 0;">
-                Organization: <strong>{{ $organization->name }}</strong> &middot; Timezone: {{ $organization->timezone }} &middot; Currency: {{ $organization->currency }}
+                {{ __('Organization') }}: <strong>{{ $organization->name }}</strong> &middot; {{ __('Timezone') }}: {{ $organization->timezone }} &middot; {{ __('Currency') }}: {{ $organization->currency }}
             </p>
         </div>
         <div class="crm-flex">
             <a href="{{ route('reports.export') }}" class="crm-btn crm-btn-secondary">
                 <span class="material-symbols-outlined" style="font-size: 18px;">file_download</span>
-                <span>Export Report</span>
+                <span>{{ __('Export Report') }}</span>
             </a>
             <a href="{{ route('leads.index') }}" class="crm-btn crm-btn-primary">
                 <span class="material-symbols-outlined" style="font-size: 18px;">add_circle</span>
-                <span>New Lead</span>
+                <span>{{ __('New Lead') }}</span>
             </a>
         </div>
     </div>
@@ -33,68 +33,68 @@
             <input type="date" name="date_from" title="From Date">
             <input type="date" name="date_to" title="To Date">
             <select name="campaign_id">
-                <option value="">All Campaigns</option>
+                <option value="">{{ __('All Campaigns') }}</option>
                 @foreach($campaigns as $campaign)
                     <option value="{{ $campaign->id }}">{{ $campaign->name }}</option>
                 @endforeach
             </select>
-            <input type="text" name="source" placeholder="Source (e.g. facebook)">
+            <input type="text" name="source" placeholder="{{ __('Source (e.g. facebook)') }}">
             <select name="assigned_user_id">
-                <option value="">All Employees</option>
+                <option value="">{{ __('All Employees') }}</option>
                 @foreach($members as $member)
                     <option value="{{ $member->id }}">{{ $member->name }}</option>
                 @endforeach
             </select>
             <select name="status">
-                <option value="">All Statuses</option>
+                <option value="">{{ __('All Statuses') }}</option>
                 @foreach($statuses as $st)
-                    <option value="{{ $st }}">{{ ucwords(str_replace('_', ' ', $st)) }}</option>
+                    <option value="{{ $st }}">{{ __(ucwords(str_replace('_', ' ', $st))) }}</option>
                 @endforeach
             </select>
-            <button type="submit" class="crm-btn crm-btn-primary crm-btn-sm">Apply Filters</button>
-            <button type="button" id="dashboard-filter-reset" class="crm-btn crm-btn-secondary crm-btn-sm">Reset</button>
+            <button type="submit" class="crm-btn crm-btn-primary crm-btn-sm">{{ __('Apply Filters') }}</button>
+            <button type="button" id="dashboard-filter-reset" class="crm-btn crm-btn-secondary crm-btn-sm">{{ __('Reset') }}</button>
         </form>
     </div>
 
     <div class="crm-kpi-grid" id="dashboard-kpis">
         <div class="crm-kpi-card">
             <div class="crm-kpi-head">
-                <span class="crm-kpi-label">Total Leads</span>
+                <span class="crm-kpi-label">{{ __('Total Leads') }}</span>
                 <span class="crm-kpi-icon"><span class="material-symbols-outlined" style="font-size:20px;">groups</span></span>
             </div>
             <div class="crm-kpi-value" data-kpi="total_leads">{{ $metrics['kpis']['total_leads'] }}</div>
         </div>
         <div class="crm-kpi-card">
             <div class="crm-kpi-head">
-                <span class="crm-kpi-label">New Leads</span>
+                <span class="crm-kpi-label">{{ __('New Leads') }}</span>
                 <span class="crm-kpi-icon"><span class="material-symbols-outlined" style="font-size:20px;">fiber_new</span></span>
             </div>
             <div class="crm-kpi-value" data-kpi="new_leads">{{ $metrics['kpis']['new_leads'] }}</div>
         </div>
         <div class="crm-kpi-card">
             <div class="crm-kpi-head">
-                <span class="crm-kpi-label">Today's Leads</span>
+                <span class="crm-kpi-label">{{ __("Today's Leads") }}</span>
                 <span class="crm-kpi-icon"><span class="material-symbols-outlined" style="font-size:20px;">today</span></span>
             </div>
             <div class="crm-kpi-value" data-kpi="todays_leads">{{ $metrics['kpis']['todays_leads'] }}</div>
         </div>
         <div class="crm-kpi-card">
             <div class="crm-kpi-head">
-                <span class="crm-kpi-label">Monthly Leads</span>
+                <span class="crm-kpi-label">{{ __('Monthly Leads') }}</span>
                 <span class="crm-kpi-icon"><span class="material-symbols-outlined" style="font-size:20px;">calendar_month</span></span>
             </div>
             <div class="crm-kpi-value" data-kpi="monthly_leads">{{ $metrics['kpis']['monthly_leads'] }}</div>
         </div>
         <div class="crm-kpi-card">
             <div class="crm-kpi-head">
-                <span class="crm-kpi-label">Unassigned Leads</span>
+                <span class="crm-kpi-label">{{ __('Unassigned Leads') }}</span>
                 <span class="crm-kpi-icon" style="color: var(--crm-tertiary);"><span class="material-symbols-outlined" style="font-size:20px;">person_off</span></span>
             </div>
             <div class="crm-kpi-value" data-kpi="unassigned_leads">{{ $metrics['kpis']['unassigned_leads'] }}</div>
         </div>
         <div class="crm-kpi-card">
             <div class="crm-kpi-head">
-                <span class="crm-kpi-label">Follow-ups Due</span>
+                <span class="crm-kpi-label">{{ __('Follow-ups Due') }}</span>
                 <span class="crm-kpi-icon" style="color: var(--crm-tertiary);"><span class="material-symbols-outlined" style="font-size:20px;">event_upcoming</span></span>
             </div>
             <div class="crm-kpi-value" data-kpi="follow_ups_due">{{ $metrics['kpis']['follow_ups_due'] }}</div>

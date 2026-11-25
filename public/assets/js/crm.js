@@ -25,7 +25,7 @@
         },
 
         renderErrors: function ($target, xhr) {
-            var message = 'Request failed.';
+            var message = window.CRM ? window.CRM.t('Request failed.') : 'Request failed.';
             if (xhr && xhr.responseJSON) {
                 if (xhr.responseJSON.errors) {
                     var msgs = [];
@@ -56,6 +56,16 @@
     };
 
     window.CRM = {
+        t: function (key, replacements) {
+            var dict = window.CRM_I18N || {};
+            var text = Object.prototype.hasOwnProperty.call(dict, key) ? dict[key] : key;
+            if (replacements && typeof replacements === 'object') {
+                Object.keys(replacements).forEach(function (k) {
+                    text = text.replace(new RegExp(':' + k, 'g'), replacements[k]);
+                });
+            }
+            return text;
+        },
         flash: function (message, type) {
             window.CrmUi.flash(message, type);
         },
@@ -73,7 +83,7 @@
             $.get('/ajax/activities', { activitable_type: type, activitable_id: id }, function (resp) {
                 var items = resp.data || [];
                 if (!items.length) {
-                    $el.html('<p class="crm-muted">No activities recorded yet.</p>');
+                    $el.html('<p class="crm-muted">' + window.CRM.t('No activities recorded yet.') + '</p>');
                     return;
                 }
                 var html = items.map(function (a) {

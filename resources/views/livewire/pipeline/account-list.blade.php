@@ -12,6 +12,9 @@
                 <th>Contacts</th>
                 <th>Deals</th>
                 <th>Created</th>
+                @if(auth()->user()?->isSuperadmin())
+                    <th>Actions</th>
+                @endif
             </tr>
         </thead>
         <tbody>
@@ -23,9 +26,15 @@
                     <td>{{ $account->contacts_count }}</td>
                     <td>{{ $account->deals_count }}</td>
                     <td>{{ $account->created_at?->format('M j, Y') }}</td>
+                    @if(auth()->user()?->isSuperadmin())
+                        <td>
+                            <button type="button" class="crm-btn crm-btn-secondary crm-btn-sm" onclick="CRM.openEditAccount({{ $account->id }}, @js($account->name), @js($account->domain ?? ''), @js($account->industry ?? ''), @js($account->annual_revenue ?? ''), @js($account->employee_count ?? ''))">Edit</button>
+                            <button type="button" class="crm-btn crm-btn-danger crm-btn-sm" onclick="CRM.deleteAccount({{ $account->id }})">Delete</button>
+                        </td>
+                    @endif
                 </tr>
             @empty
-                <tr><td colspan="6" class="crm-muted">No accounts found.</td></tr>
+                <tr><td colspan="{{ auth()->user()?->isSuperadmin() ? 7 : 6 }}" class="crm-muted">No accounts found.</td></tr>
             @endforelse
         </tbody>
     </table>

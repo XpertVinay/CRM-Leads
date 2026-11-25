@@ -7,7 +7,9 @@ use App\Modules\Compliance\Models\AuditLog;
 use App\Modules\Compliance\Services\GdprComplianceService;
 use App\Modules\Leads\Models\Lead;
 use App\Modules\Pipeline\Models\Contact;
+use App\Modules\Tenancy\Context\TenantContext;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\View\View;
 
@@ -57,5 +59,53 @@ class GdprController extends Controller
             ->get();
 
         return response()->json(['data' => $logs]);
+    }
+
+    public function storeAuditLog(Request $request, TenantContext $tenantContext): JsonResponse
+    {
+        $validated = $request->validate([
+            'action' => ['required', 'string', 'max:100'],
+            'auditable_type' => ['nullable', 'string', 'max:100'],
+            'auditable_id' => ['nullable', 'integer'],
+            'ip_address' => ['nullable', 'string', 'max:45'],
+        ]);
+
+        $log = AuditLog::create([
+            'organization_id' => (int) $tenantContext->getTenantId(),
+            'user_id' => $request->user()?->id,
+            'action' => $validated['action'],
+            'auditable_type' => $validated['auditable_type'] ?? null,
+            'auditable_id' => $validated['auditable_id'] ?? null,
+            'ip_address' => $validated['ip_address'] ?? $request->ip(),
+        ]);
+
+        return response()->json([
+            'message' => 'Audit log created.',
+            'data' => $log->load('user:id,name,email'),
+        ], 201);
+    }
+
+    public function updateAuditLog(Request $request, AuditLog $auditLog): JsonResponse
+    {
+        $validated = $request->validate([
+            'action' => ['required', 'string', 'max:100'],
+            'auditable_type' => ['nullable', 'string', 'max:100'],
+            'auditable_id' => ['nullable', 'integer'],
+            'ip_address' => ['nullable', 'string', 'max:45'],
+        ]);
+
+        $auditLog->update($validated);
+
+        return response()->json([
+            'message' => 'Audit log updated.',
+            'data' => $auditLog->fresh()->load('user:id,name,email'),
+        ]);
+    }
+
+    public function destroyAuditLog(AuditLog $auditLog): JsonResponse
+    {
+        $auditLog->delete();
+
+        return response()->json(['message' => 'Audit log deleted.']);
     }
 }

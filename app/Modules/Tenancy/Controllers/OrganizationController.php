@@ -20,7 +20,9 @@ class OrganizationController extends Controller
     public function index(Request $request): View
     {
         $user = $request->user();
-        $organizations = $user->organizations()->orderBy('organizations.id')->get();
+        $organizations = $user->isSuperadmin()
+            ? Organization::query()->orderBy('id')->get()
+            : $user->organizations()->orderBy('organizations.id')->get();
         $activeOrgId = (int) $request->session()->get('active_organization_id', 0);
         $activeOrganization = $organizations->firstWhere('id', $activeOrgId)
             ?? $organizations->firstWhere('status', 'active');
@@ -32,7 +34,7 @@ class OrganizationController extends Controller
         return view('organizations.index', [
             'organizations' => $organizations,
             'activeOrganization' => $activeOrganization,
-            'activeRole' => $activeOrganization ? $user->roleIn($activeOrganization) : null,
+            'activeRole' => $activeOrganization ? ($user->isSuperadmin() ? 'superadmin' : $user->roleIn($activeOrganization)) : null,
         ]);
     }
 
@@ -174,5 +176,53 @@ class OrganizationController extends Controller
                 'role' => $user->roleIn($organization),
             ],
         ]);
+    }
+
+    public function superadminUpdate(Request $request, Organization $organization): JsonResponse|RedirectResponse
+    {
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:191'],
+            'primary_contact_email' => [
+                'nullable',
+                'email',
+                'max:191',
+                Rule::unique('organizations', 'primary_contact_email')->ignore($organization->id),
+            ],
+            'timezone' => ['required', 'string', 'max:50', 'timezone:all'],
+            'currency' => ['required', 'string', 'size:3', 'regex:/^[A-Za-z]{3}$/'],
+            'status' => ['required', Rule::in(['active', 'suspended'])],
+        ]);
+
+        $organization->update([
+            'name' => $validated['name'],
+            'primary_contact_email' => $validated['primary_contact_email'] ?? null,
+            'timezone' => $validated['timezone'],
+            'currency' => strtoupper($validated['currency']),
+            'status' => $validated['status'],
+        ]);
+
+        if ($request->expectsJson() || $request->is('ajax/*')) {
+            return response()->json([
+                'message' => 'Organization updated.',
+                'organization' => $organization->fresh(),
+            ]);
+        }
+
+        return redirect()->route('organizations.index')->with('status', 'Organization updated.');
+    }
+
+    public function superadminDestroy(Request $request, Organization $organization): JsonResponse|RedirectResponse
+    {
+        if ($request->hasSession() && (int) $request->session()->get('active_organization_id') === (int) $organization->id) {
+            $request->session()->forget('active_organization_id');
+        }
+
+        $organization->delete();
+
+        if ($request->expectsJson() || $request->is('ajax/*')) {
+            return response()->json(['message' => 'Organization deleted.']);
+        }
+
+        return redirect()->route('organizations.index')->with('status', 'Organization deleted.');
     }
 }

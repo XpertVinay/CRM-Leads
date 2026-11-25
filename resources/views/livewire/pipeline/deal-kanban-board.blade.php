@@ -1,6 +1,6 @@
 <div>
     <div class="crm-toolbar" style="margin-bottom:1rem;">
-        <label for="kanban-pipeline-select">Pipeline:</label>
+        <label for="kanban-pipeline-select">{{ __('Pipelines') }}:</label>
         <select id="kanban-pipeline-select" wire:model.live="pipelineId" class="crm-input" style="max-width:250px;">
             @foreach($pipelines as $p)
                 <option value="{{ $p->id }}">{{ $p->name }}{{ $p->is_default ? ' (Default)' : '' }}</option>

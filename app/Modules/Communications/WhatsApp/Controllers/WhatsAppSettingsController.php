@@ -198,4 +198,64 @@ class WhatsAppSettingsController extends Controller
             'data' => $consent,
         ], 201);
     }
+
+    public function storeTemplate(Request $request, TenantContext $tenantContext): JsonResponse
+    {
+        $account = WhatsAppAccount::first();
+        if (! $account) {
+            return response()->json([
+                'message' => 'Connect a WhatsApp account before creating templates.',
+            ], 422);
+        }
+
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:191'],
+            'language' => ['required', 'string', 'max:32'],
+            'category' => ['required', 'string', 'in:utility,marketing,authentication'],
+            'body_text' => ['required', 'string', 'max:2000'],
+            'meta_status' => ['nullable', 'string', 'in:APPROVED,PENDING,REJECTED'],
+        ]);
+
+        $template = WhatsAppTemplate::create([
+            'organization_id' => (int) $tenantContext->getTenantId(),
+            'whatsapp_account_id' => $account->id,
+            'name' => $validated['name'],
+            'language' => $validated['language'],
+            'category' => $validated['category'],
+            'header_type' => 'none',
+            'body_text' => $validated['body_text'],
+            'parameter_placeholders' => [],
+            'meta_status' => $validated['meta_status'] ?? 'APPROVED',
+        ]);
+
+        return response()->json([
+            'message' => 'Template created.',
+            'data' => $template,
+        ], 201);
+    }
+
+    public function updateTemplate(Request $request, WhatsAppTemplate $template): JsonResponse
+    {
+        $validated = $request->validate([
+            'name' => ['sometimes', 'required', 'string', 'max:191'],
+            'language' => ['sometimes', 'required', 'string', 'max:32'],
+            'category' => ['sometimes', 'required', 'string', 'in:utility,marketing,authentication'],
+            'body_text' => ['sometimes', 'required', 'string', 'max:2000'],
+            'meta_status' => ['sometimes', 'required', 'string', 'in:APPROVED,PENDING,REJECTED'],
+        ]);
+
+        $template->update($validated);
+
+        return response()->json([
+            'message' => 'Template updated.',
+            'data' => $template->fresh(),
+        ]);
+    }
+
+    public function destroyTemplate(WhatsAppTemplate $template): JsonResponse
+    {
+        $template->delete();
+
+        return response()->json(['message' => 'Template deleted.']);
+    }
 }

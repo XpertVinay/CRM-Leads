@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
+<html lang="{{ config('localization.supported.'.app()->getLocale().'.html_lang', 'en-IN') }}">
 @php
     $configuredName = config('app.name');
     $brandName = (!$configuredName || $configuredName === 'Laravel') ? 'LeadFlow CRM' : $configuredName;
@@ -14,7 +14,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link
-        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@600;700&display=swap"
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Manrope:wght@600;700&family=Noto+Sans+Devanagari:wght@400;500;600;700&display=swap"
         rel="stylesheet">
     <link
         href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200"
@@ -51,16 +51,17 @@
             </ul>
 
             <div class="lp-nav-actions">
+                @include('partials.language-switcher', ['switcherId' => 'landing'])
                 @auth
-                    <a href="{{ route('organizations.index') }}" class="crm-btn crm-btn-secondary">My Companies</a>
+                    <a href="{{ route('organizations.index') }}" class="crm-btn crm-btn-secondary">{{ __('Organizations') }}</a>
                     <a href="{{ url('/dashboard') }}" class="crm-btn crm-btn-primary">
-                        <span>Open Dashboard</span>
+                        <span>{{ __('Dashboard') }}</span>
                         <span class="material-symbols-outlined" style="font-size:17px;">arrow_forward</span>
                     </a>
                 @else
-                    <a href="{{ route('login') }}" class="crm-btn crm-btn-secondary">Log In</a>
+                    <a href="{{ route('login') }}" class="crm-btn crm-btn-secondary">{{ __('Login') }}</a>
                     <a href="{{ route('register') }}" class="crm-btn crm-btn-primary">
-                        <span>Start Free</span>
+                        <span>{{ __('Get Started') }}</span>
                         <span class="material-symbols-outlined" style="font-size:17px;">arrow_forward</span>
                     </a>
                 @endauth
@@ -822,6 +823,8 @@
             </div>
         </div>
     </footer>
+
+    @include('partials.language-selection-popup')
 
     <script src="{{ asset('assets/js/jquery.min.js') }}"></script>
     <script src="{{ asset('assets/js/landing.js') }}"></script>

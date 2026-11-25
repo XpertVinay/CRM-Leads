@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\LocaleController;
 use App\Modules\Analytics\Controllers\AnalyticsDashboardController;
 use App\Modules\Analytics\Controllers\ReportController;
 use App\Modules\Campaigns\Controllers\CampaignController;
@@ -32,6 +33,9 @@ Route::get('/', function () {
     return view('welcome');
 })->name('home');
 
+Route::post('/locale', [LocaleController::class, 'update'])->name('locale.update');
+Route::get('/locale/{locale}', [LocaleController::class, 'switch'])->name('locale.switch');
+
 Route::get('/l/{code}', RedirectTrackingLinkController::class)
     ->middleware('throttle:120,1')
     ->name('tracking-links.redirect');
@@ -61,6 +65,11 @@ Route::middleware(['auth'])->group(function (): void {
     Route::get('/organizations', [OrganizationController::class, 'index'])->name('organizations.index');
     Route::post('/organizations', [OrganizationController::class, 'store'])->name('organizations.store');
     Route::post('/ajax/organizations/switch', [OrganizationController::class, 'switch'])->name('ajax.organizations.switch');
+
+    Route::middleware(['superadmin'])->group(function (): void {
+        Route::patch('/superadmin/organizations/{organization}', [OrganizationController::class, 'superadminUpdate'])->name('superadmin.organizations.update');
+        Route::delete('/superadmin/organizations/{organization}', [OrganizationController::class, 'superadminDestroy'])->name('superadmin.organizations.destroy');
+    });
 });
 
 Route::middleware(['auth', 'tenant'])->group(function (): void {
@@ -197,5 +206,15 @@ Route::middleware(['auth', 'tenant'])->group(function (): void {
 
         Route::get('/audit-logs', [GdprController::class, 'auditLogs'])->name('audit-logs.index');
         Route::get('/ajax/audit-logs', [GdprController::class, 'auditLogsJson'])->name('ajax.audit-logs.index');
+    });
+
+    Route::middleware(['superadmin'])->group(function (): void {
+        Route::post('/ajax/whatsapp/templates', [WhatsAppSettingsController::class, 'storeTemplate'])->name('ajax.whatsapp.templates.store');
+        Route::match(['put', 'patch'], '/ajax/whatsapp/templates/{template}', [WhatsAppSettingsController::class, 'updateTemplate'])->name('ajax.whatsapp.templates.update');
+        Route::delete('/ajax/whatsapp/templates/{template}', [WhatsAppSettingsController::class, 'destroyTemplate'])->name('ajax.whatsapp.templates.destroy');
+
+        Route::post('/ajax/audit-logs', [GdprController::class, 'storeAuditLog'])->name('ajax.audit-logs.store');
+        Route::match(['put', 'patch'], '/ajax/audit-logs/{auditLog}', [GdprController::class, 'updateAuditLog'])->name('ajax.audit-logs.update');
+        Route::delete('/ajax/audit-logs/{auditLog}', [GdprController::class, 'destroyAuditLog'])->name('ajax.audit-logs.destroy');
     });
 });
