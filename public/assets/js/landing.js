@@ -40,26 +40,73 @@
             $('[data-lp-mode-panel="' + mode + '"]').addClass('is-active');
         });
 
-        // Interactive industry pills for Starter vs Gold overage rates
-        var industryRates = {
-            'saas': { label: 'Software & IT Services', starter: '₹25 / extra lead', gold: '₹18 / extra lead' },
-            'realestate': { label: 'Real Estate & Property', starter: '₹45 / extra lead', gold: '₹32 / extra lead' },
-            'education': { label: 'Coaching, Courses & Schools', starter: '₹15 / extra lead', gold: '₹10 / extra lead' },
-            'ecommerce': { label: 'Online Store & Retail', starter: '₹12 / extra lead', gold: '₹8 / extra lead' },
-            'healthcare': { label: 'Clinics & Healthcare', starter: '₹30 / extra lead', gold: '₹22 / extra lead' },
-            'finance': { label: 'Loans, Insurance & Finance', starter: '₹50 / extra lead', gold: '₹35 / extra lead' }
+        // Interactive industry pills: distinct Starter vs. Gold rates by industry
+        var i18n = window.landingI18n || {};
+        var industryLabels = i18n.industries || {};
+        var extraLeadSuffix = i18n.extraLeadSuffix || ' / extra lead';
+        var extraUserSuffix = i18n.extraUserSuffix || ' / extra user / mo';
+
+        var industryProfiles = {
+            'saas': {
+                label: industryLabels.saas || 'Software & IT Services',
+                starterLead: 300,
+                goldLead: 220,
+                starterSeat: 900,
+                goldSeat: 700
+            },
+            'realestate': {
+                label: industryLabels.realestate || 'Real Estate & Property',
+                starterLead: 400,
+                goldLead: 300,
+                starterSeat: 1100,
+                goldSeat: 850
+            },
+            'education': {
+                label: industryLabels.education || 'Coaching, Courses & Schools',
+                starterLead: 225,
+                goldLead: 165,
+                starterSeat: 750,
+                goldSeat: 575
+            },
+            'ecommerce': {
+                label: industryLabels.ecommerce || 'Online Store & Retail',
+                starterLead: 200,
+                goldLead: 150,
+                starterSeat: 700,
+                goldSeat: 550
+            },
+            'healthcare': {
+                label: industryLabels.healthcare || 'Clinics & Healthcare',
+                starterLead: 350,
+                goldLead: 260,
+                starterSeat: 1000,
+                goldSeat: 750
+            },
+            'finance': {
+                label: industryLabels.finance || 'Loans, Insurance & Finance',
+                starterLead: 450,
+                goldLead: 330,
+                starterSeat: 1200,
+                goldSeat: 900
+            }
         };
+
+        function formatInr(amount) {
+            return '₹' + Number(amount).toLocaleString('en-IN');
+        }
 
         $('[data-lp-industry]').on('click', function () {
             var key = $(this).data('lp-industry');
-            var info = industryRates[key] || industryRates['saas'];
+            var profile = industryProfiles[key] || industryProfiles['saas'];
 
             $('[data-lp-industry]').removeClass('is-active').attr('aria-selected', 'false');
             $(this).addClass('is-active').attr('aria-selected', 'true');
 
-            $('[data-lp-industry-label]').text(info.label);
-            $('[data-lp-rate-starter]').text(info.starter);
-            $('[data-lp-rate-gold]').text(info.gold);
+            $('[data-lp-industry-label]').text(profile.label);
+            $('[data-lp-rate-starter]').text(formatInr(profile.starterLead) + extraLeadSuffix);
+            $('[data-lp-rate-gold]').text(formatInr(profile.goldLead) + extraLeadSuffix);
+            $('[data-lp-seat-starter]').text(formatInr(profile.starterSeat) + extraUserSuffix);
+            $('[data-lp-seat-gold]').text(formatInr(profile.goldSeat) + extraUserSuffix);
         });
 
         // FAQ Accordion

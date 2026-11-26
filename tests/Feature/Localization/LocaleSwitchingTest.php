@@ -139,4 +139,41 @@ class LocaleSwitchingTest extends TestCase
         $this->assertSame('₹12,34,567.50', LocaleHelper::formatInr(1234567.5));
         $this->assertSame('25/11/2026', LocaleHelper::formatDate(Carbon::create(2026, 11, 25)));
     }
+
+    public function test_landing_page_renders_all_sections_in_en_in_hinglish_and_hindi(): void
+    {
+        $this->get('/')
+            ->assertOk()
+            ->assertSee('<html lang="en-IN">', false)
+            ->assertSee('Built for growing Indian SMBs')
+            ->assertSee('Up to 25 leads/month')
+            ->assertSee('Up to 75 leads/month')
+            ->assertSee('₹300 / extra lead')
+            ->assertSee('₹220 / extra lead')
+            ->assertSee('Everything You Might Be Wondering');
+
+        $this->post('/locale', ['locale' => 'hi_Latn'])
+            ->assertRedirect();
+
+        $this->get('/')
+            ->assertOk()
+            ->assertSee('<html lang="hi-Latn">', false)
+            ->assertSee('Badhte Indian SMBs ke liye bana')
+            ->assertSee('25 leads/mahina tak')
+            ->assertSee('75 leads/mahina tak')
+            ->assertSee('Har Woh Sawaal Jo Aapke Mann Mein Ho Sakta Hai')
+            ->assertSee('Software aur IT Services');
+
+        $this->post('/locale', ['locale' => 'hi'])
+            ->assertRedirect();
+
+        $this->get('/')
+            ->assertOk()
+            ->assertSee('<html lang="hi">', false)
+            ->assertSee('बढ़ते भारतीय SMBs के लिए निर्मित')
+            ->assertSee('प्रति माह 25 लीड्स तक')
+            ->assertSee('प्रति माह 75 लीड्स तक')
+            ->assertSee('वह सब कुछ जो आप जानना चाहेंगे')
+            ->assertSee('सॉफ्टवेयर और IT सेवाएं');
+    }
 }

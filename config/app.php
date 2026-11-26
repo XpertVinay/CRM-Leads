@@ -123,4 +123,6 @@ return [
         'store' => env('APP_MAINTENANCE_STORE', 'database'),
     ],
 
+    'organization_type' => env('APP_ORGANIZATION_TYPE', null),
+
 ];
