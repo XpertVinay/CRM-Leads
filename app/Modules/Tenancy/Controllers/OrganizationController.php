@@ -5,8 +5,10 @@ namespace App\Modules\Tenancy\Controllers;
 use App\Http\Controllers\Controller;
 use App\Models\Organization;
 use App\Modules\Tenancy\Context\TenantContext;
+use App\Modules\Tenancy\Services\RbacService;
 use App\Modules\Tenancy\Services\TenantProvisioningService;
 use App\Modules\Tenancy\Support\OrganizationInputNormalizer;
+use App\Support\Security\DataEncrypter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -31,10 +33,18 @@ class OrganizationController extends Controller
             $request->session()->put('active_organization_id', (int) $activeOrganization->id);
         }
 
+        $activeRole = $activeOrganization
+            ? ($user->roleIn($activeOrganization) ?? ($user->isSuperadmin() ? 'superadmin' : null))
+            : null;
+        $activePermissions = $activeOrganization
+            ? app(RbacService::class)->getEffectivePermissions($user, $activeOrganization)
+            : [];
+
         return view('organizations.index', [
             'organizations' => $organizations,
             'activeOrganization' => $activeOrganization,
-            'activeRole' => $activeOrganization ? ($user->isSuperadmin() ? 'superadmin' : $user->roleIn($activeOrganization)) : null,
+            'activeRole' => $activeRole,
+            'activePermissions' => $activePermissions,
         ]);
     }
 
@@ -56,11 +66,22 @@ class OrganizationController extends Controller
         $input['timezone'] = OrganizationInputNormalizer::normalizeNullableString($input['timezone'] ?? null);
         $input['currency'] = OrganizationInputNormalizer::normalizeNullableString($input['currency'] ?? null);
 
+        $encrypter = DataEncrypter::instance();
         $validator = Validator::make($input, [
             'name' => ['required', 'string', 'max:191'],
             'slug' => ['nullable', 'string', 'max:191', 'unique:organizations,slug'],
             'registration_identifier' => ['nullable', 'string', 'max:100', 'unique:organizations,registration_identifier'],
-            'primary_contact_email' => ['nullable', 'email', 'max:191', 'unique:organizations,primary_contact_email'],
+            'primary_contact_email' => [
+                'nullable',
+                'email',
+                'max:191',
+                function (string $attribute, mixed $value, \Closure $fail) use ($encrypter): void {
+                    $hash = is_string($value) ? $encrypter->blindIndex($value, 'email') : null;
+                    if ($hash !== null && Organization::withTrashed()->where('primary_contact_email_hash', $hash)->exists()) {
+                        $fail(__('validation.unique', ['attribute' => $attribute]));
+                    }
+                },
+            ],
             'timezone' => ['nullable', 'string', 'max:50', 'timezone:all'],
             'currency' => ['nullable', 'string', 'size:3', 'regex:/^[A-Za-z]{3}$/'],
         ]);
@@ -115,7 +136,15 @@ class OrganizationController extends Controller
                 'nullable',
                 'email',
                 'max:191',
-                Rule::unique('organizations', 'primary_contact_email')->ignore($organization->id),
+                function (string $attribute, mixed $value, \Closure $fail) use ($organization): void {
+                    $hash = is_string($value) ? DataEncrypter::instance()->blindIndex($value, 'email') : null;
+                    if ($hash !== null && Organization::withTrashed()
+                        ->where('primary_contact_email_hash', $hash)
+                        ->where('id', '!=', $organization->id)
+                        ->exists()) {
+                        $fail(__('validation.unique', ['attribute' => $attribute]));
+                    }
+                },
             ],
             'timezone' => ['required', 'string', 'max:50', 'timezone:all'],
             'currency' => ['required', 'string', 'size:3', 'regex:/^[A-Za-z]{3}$/'],
@@ -180,13 +209,23 @@ class OrganizationController extends Controller
 
     public function superadminUpdate(Request $request, Organization $organization): JsonResponse|RedirectResponse
     {
+        abort_unless($request->user()?->isSuperadmin(), 403);
+
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:191'],
             'primary_contact_email' => [
                 'nullable',
                 'email',
                 'max:191',
-                Rule::unique('organizations', 'primary_contact_email')->ignore($organization->id),
+                function (string $attribute, mixed $value, \Closure $fail) use ($organization): void {
+                    $hash = is_string($value) ? DataEncrypter::instance()->blindIndex($value, 'email') : null;
+                    if ($hash !== null && Organization::withTrashed()
+                        ->where('primary_contact_email_hash', $hash)
+                        ->where('id', '!=', $organization->id)
+                        ->exists()) {
+                        $fail(__('validation.unique', ['attribute' => $attribute]));
+                    }
+                },
             ],
             'timezone' => ['required', 'string', 'max:50', 'timezone:all'],
             'currency' => ['required', 'string', 'size:3', 'regex:/^[A-Za-z]{3}$/'],
@@ -213,6 +252,8 @@ class OrganizationController extends Controller
 
     public function superadminDestroy(Request $request, Organization $organization): JsonResponse|RedirectResponse
     {
+        abort_unless($request->user()?->isSuperadmin(), 403);
+
         if ($request->hasSession() && (int) $request->session()->get('active_organization_id') === (int) $organization->id) {
             $request->session()->forget('active_organization_id');
         }

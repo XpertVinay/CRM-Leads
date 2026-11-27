@@ -22,37 +22,23 @@ class DealPolicy
     {
         $tenant = app(TenantContext::class)->getTenant();
 
-        if ($tenant === null) {
-            return false;
-        }
-
-        return in_array($user->roleIn($tenant), TenantRole::values(), true);
+        return $tenant !== null && $user->hasPermissionIn($tenant, 'deals.view');
     }
 
     public function view(User $user, Deal $deal): bool
     {
         $tenant = app(TenantContext::class)->getTenant();
 
-        if ($tenant === null || (int) $deal->organization_id !== (int) $tenant->id) {
-            return false;
-        }
-
-        return in_array($user->roleIn($tenant), TenantRole::values(), true);
+        return $tenant !== null
+            && (int) $deal->organization_id === (int) $tenant->id
+            && $user->hasPermissionIn($tenant, 'deals.view');
     }
 
     public function create(User $user): bool
     {
         $tenant = app(TenantContext::class)->getTenant();
 
-        if ($tenant === null) {
-            return false;
-        }
-
-        return $user->hasRoleIn($tenant, [
-            TenantRole::OrgAdmin->value,
-            TenantRole::SalesManager->value,
-            TenantRole::SalesRep->value,
-        ]);
+        return $tenant !== null && $user->hasPermissionIn($tenant, 'deals.create');
     }
 
     public function update(User $user, Deal $deal): bool
@@ -63,30 +49,24 @@ class DealPolicy
             return false;
         }
 
-        $role = $user->roleIn($tenant);
-        if (in_array($role, [TenantRole::OrgAdmin->value, TenantRole::SalesManager->value], true)) {
-            return true;
+        if (! $user->hasPermissionIn($tenant, 'deals.update')) {
+            return false;
         }
 
-        if ($role === TenantRole::SalesRep->value) {
+        if ($user->roleIn($tenant) === TenantRole::SalesRep->value) {
             return $deal->assigned_user_id === null || (int) $deal->assigned_user_id === (int) $user->id;
         }
 
-        return false;
+        return true;
     }
 
     public function delete(User $user, Deal $deal): bool
     {
         $tenant = app(TenantContext::class)->getTenant();
 
-        if ($tenant === null || (int) $deal->organization_id !== (int) $tenant->id) {
-            return false;
-        }
-
-        return $user->hasRoleIn($tenant, [
-            TenantRole::OrgAdmin->value,
-            TenantRole::SalesManager->value,
-        ]);
+        return $tenant !== null
+            && (int) $deal->organization_id === (int) $tenant->id
+            && $user->hasPermissionIn($tenant, 'deals.delete');
     }
 
     public function transitionStage(User $user, Deal $deal): bool

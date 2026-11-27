@@ -21,6 +21,15 @@ class RedirectTrackingLinkController extends Controller
             ->where('is_active', true)
             ->firstOrFail();
 
+        if (! $trackingLink->isUsable()) {
+            abort(410, 'This tracking link has expired or is inactive.');
+        }
+
+        $scheme = strtolower((string) parse_url((string) $trackingLink->destination_url, PHP_URL_SCHEME));
+        if (! in_array($scheme, ['http', 'https'], true)) {
+            abort(400, 'Invalid destination URL.');
+        }
+
         $click = $shortener->recordClick($trackingLink, $request);
 
         return redirect()

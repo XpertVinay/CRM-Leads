@@ -22,37 +22,23 @@ class LeadPolicy
     {
         $tenant = app(TenantContext::class)->getTenant();
 
-        if ($tenant === null) {
-            return false;
-        }
-
-        return in_array($user->roleIn($tenant), TenantRole::values(), true);
+        return $tenant !== null && $user->hasPermissionIn($tenant, 'leads.view');
     }
 
     public function view(User $user, Lead $lead): bool
     {
         $tenant = app(TenantContext::class)->getTenant();
 
-        if ($tenant === null || (int) $lead->organization_id !== (int) $tenant->id) {
-            return false;
-        }
-
-        return in_array($user->roleIn($tenant), TenantRole::values(), true);
+        return $tenant !== null
+            && (int) $lead->organization_id === (int) $tenant->id
+            && $user->hasPermissionIn($tenant, 'leads.view');
     }
 
     public function create(User $user): bool
     {
         $tenant = app(TenantContext::class)->getTenant();
 
-        if ($tenant === null) {
-            return false;
-        }
-
-        return $user->hasRoleIn($tenant, [
-            TenantRole::OrgAdmin->value,
-            TenantRole::SalesManager->value,
-            TenantRole::SalesRep->value,
-        ]);
+        return $tenant !== null && $user->hasPermissionIn($tenant, 'leads.create');
     }
 
     public function update(User $user, Lead $lead): bool
@@ -63,33 +49,36 @@ class LeadPolicy
             return false;
         }
 
-        $role = $user->roleIn($tenant);
-        if (in_array($role, [TenantRole::OrgAdmin->value, TenantRole::SalesManager->value], true)) {
-            return true;
+        if (! $user->hasPermissionIn($tenant, 'leads.update')) {
+            return false;
         }
 
-        if ($role === TenantRole::SalesRep->value) {
+        if ($user->roleIn($tenant) === TenantRole::SalesRep->value) {
             return $lead->assigned_user_id === null || (int) $lead->assigned_user_id === (int) $user->id;
         }
 
-        return false;
+        return true;
     }
 
     public function delete(User $user, Lead $lead): bool
     {
         $tenant = app(TenantContext::class)->getTenant();
 
-        if ($tenant === null || (int) $lead->organization_id !== (int) $tenant->id) {
-            return false;
-        }
-
-        return $user->hasRoleIn($tenant, [
-            TenantRole::OrgAdmin->value,
-            TenantRole::SalesManager->value,
-        ]);
+        return $tenant !== null
+            && (int) $lead->organization_id === (int) $tenant->id
+            && $user->hasPermissionIn($tenant, 'leads.delete');
     }
 
     public function assign(User $user, Lead $lead): bool
+    {
+        $tenant = app(TenantContext::class)->getTenant();
+
+        return $tenant !== null
+            && (int) $lead->organization_id === (int) $tenant->id
+            && $user->hasPermissionIn($tenant, 'leads.assign');
+    }
+
+    public function convert(User $user, Lead $lead): bool
     {
         $tenant = app(TenantContext::class)->getTenant();
 
@@ -97,14 +86,14 @@ class LeadPolicy
             return false;
         }
 
-        return $user->hasRoleIn($tenant, [
-            TenantRole::OrgAdmin->value,
-            TenantRole::SalesManager->value,
-        ]);
-    }
+        if (! $user->hasPermissionIn($tenant, 'leads.convert')) {
+            return false;
+        }
 
-    public function convert(User $user, Lead $lead): bool
-    {
-        return $this->update($user, $lead);
+        if ($user->roleIn($tenant) === TenantRole::SalesRep->value) {
+            return $lead->assigned_user_id === null || (int) $lead->assigned_user_id === (int) $user->id;
+        }
+
+        return true;
     }
 }

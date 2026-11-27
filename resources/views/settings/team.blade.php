@@ -20,7 +20,7 @@
                     <label class="crm-label" for="invite_role">Role</label>
                     <select id="invite_role" class="crm-select" name="role">
                         @foreach($roles as $role)
-                            <option value="{{ $role->value }}">{{ $role->label() }}</option>
+                            <option value="{{ $role->slug }}">{{ $role->name }}</option>
                         @endforeach
                     </select>
                 </div>
@@ -60,17 +60,27 @@
                 </thead>
                 <tbody>
                     @foreach($members as $member)
+                        @php
+                            $canUpdateMemberRole = auth()->user()?->isSuperadmin()
+                                || ((int) ($member->pivot->invited_by_user_id ?? 0) === (int) auth()->id()
+                                    && $member->pivot->role !== \App\Modules\Tenancy\Enums\TenantRole::OrgAdmin->value);
+                        @endphp
                         <tr>
                             <td>{{ $member->name }}</td>
                             <td>{{ $member->email }}</td>
                             <td>
-                                <select class="crm-select js-member-role" data-user-id="{{ $member->id }}" style="max-width: 180px;">
-                                    @foreach($roles as $role)
-                                        <option value="{{ $role->value }}" {{ $member->pivot->role === $role->value ? 'selected' : '' }}>
-                                            {{ $role->label() }}
-                                        </option>
-                                    @endforeach
-                                </select>
+                                @if($canUpdateMemberRole)
+                                    <select class="crm-select js-member-role" data-user-id="{{ $member->id }}" style="max-width: 180px;">
+                                        @foreach($roles as $role)
+                                            <option value="{{ $role->slug }}" {{ $member->pivot->role === $role->slug ? 'selected' : '' }}>
+                                                {{ $role->name }}
+                                            </option>
+                                        @endforeach
+                                    </select>
+                                @else
+                                    <span class="crm-badge crm-badge-{{ $member->pivot->role }}">{{ $member->pivot->role }}</span>
+                                    <div class="crm-muted" style="font-size:0.75rem;">Managed by inviter / Superadmin</div>
+                                @endif
                             </td>
                             <td>
                                 <button type="button" class="crm-btn crm-btn-danger crm-btn-sm js-remove-member" data-user-id="{{ $member->id }}">Remove</button>
@@ -122,7 +132,7 @@ $(function () {
         e.preventDefault();
         $.post('/ajax/organizations/invite', $(this).serialize())
             .done(function (res) {
-                $('#js-invite-result').html('<div class="crm-alert crm-alert-success">Invite link: <code>' + res.accept_url + '</code></div>');
+                $('#js-invite-result').html('<div class="crm-alert crm-alert-success">Invite link: <code>' + CRM.escapeHtml(res.accept_url) + '</code></div>');
             })
             .fail(function (xhr) { window.CrmUi.renderErrors($('#js-invite-result'), xhr); });
     });
@@ -131,7 +141,7 @@ $(function () {
         e.preventDefault();
         $.post('/ajax/team/tokens', $(this).serialize())
             .done(function (res) {
-                $('#js-token-result').html('<div class="crm-alert crm-alert-success">Token (copy now): <code>' + res.plain_text_token + '</code></div>');
+                $('#js-token-result').html('<div class="crm-alert crm-alert-success">Token (copy now): <code>' + CRM.escapeHtml(res.plain_text_token) + '</code></div>');
             })
             .fail(function (xhr) { window.CrmUi.renderErrors($('#js-token-result'), xhr); });
     });

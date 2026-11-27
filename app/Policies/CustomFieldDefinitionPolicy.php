@@ -22,33 +22,23 @@ class CustomFieldDefinitionPolicy
     {
         $tenant = app(TenantContext::class)->getTenant();
 
-        if ($tenant === null) {
-            return false;
-        }
-
-        return in_array($user->roleIn($tenant), TenantRole::values(), true);
+        return $tenant !== null && $user->hasPermissionIn($tenant, 'custom_fields.view');
     }
 
     public function view(User $user, CustomFieldDefinition $definition): bool
     {
         $tenant = app(TenantContext::class)->getTenant();
 
-        if ($tenant === null || (int) $definition->organization_id !== (int) $tenant->id) {
-            return false;
-        }
-
-        return in_array($user->roleIn($tenant), TenantRole::values(), true);
+        return $tenant !== null
+            && (int) $definition->organization_id === (int) $tenant->id
+            && $user->hasPermissionIn($tenant, 'custom_fields.view');
     }
 
     public function manageSettings(User $user): bool
     {
         $tenant = app(TenantContext::class)->getTenant();
 
-        if ($tenant === null) {
-            return false;
-        }
-
-        return $user->roleIn($tenant) === TenantRole::OrgAdmin->value;
+        return $tenant !== null && $user->hasPermissionIn($tenant, 'custom_fields.manage');
     }
 
     public function create(User $user): bool
@@ -60,21 +50,17 @@ class CustomFieldDefinitionPolicy
     {
         $tenant = app(TenantContext::class)->getTenant();
 
-        if ($tenant === null || (int) $definition->organization_id !== (int) $tenant->id) {
-            return false;
-        }
-
-        return $user->roleIn($tenant) === TenantRole::OrgAdmin->value;
+        return $tenant !== null
+            && (int) $definition->organization_id === (int) $tenant->id
+            && $user->hasPermissionIn($tenant, 'custom_fields.manage');
     }
 
     public function delete(User $user, CustomFieldDefinition $definition): bool
     {
         $tenant = app(TenantContext::class)->getTenant();
 
-        if ($tenant === null || (int) $definition->organization_id !== (int) $tenant->id) {
-            return false;
-        }
-
-        return $user->roleIn($tenant) === TenantRole::OrgAdmin->value;
+        return $tenant !== null
+            && (int) $definition->organization_id === (int) $tenant->id
+            && $user->hasPermissionIn($tenant, 'custom_fields.manage');
     }
 }

@@ -9,6 +9,7 @@ use App\Modules\Tenancy\Context\TenantContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Str;
 use Illuminate\View\View;
 
 class AccountController extends Controller
@@ -37,17 +38,25 @@ class AccountController extends Controller
             ->withCount('contacts', 'deals')
             ->orderByDesc('id');
 
+        $limit = min(max((int) $request->query('limit', 200), 1), 500);
+
         $search = $request->query('search');
         if (is_string($search) && trim($search) !== '') {
-            $needle = '%' . strtolower(trim($search)) . '%';
-            $query->where(function ($q) use ($needle): void {
-                $q->whereRaw('LOWER(name) LIKE ?', [$needle])
-                    ->orWhereRaw('LOWER(COALESCE(domain, \'\')) LIKE ?', [$needle])
-                    ->orWhereRaw('LOWER(COALESCE(industry, \'\')) LIKE ?', [$needle]);
-            });
+            $needle = Str::lower(trim($search));
+            $accounts = $query->get()->filter(function (Account $account) use ($needle): bool {
+                foreach ([$account->name, $account->domain, $account->industry] as $value) {
+                    if (is_string($value) && $value !== '' && Str::contains(Str::lower($value), $needle)) {
+                        return true;
+                    }
+                }
+
+                return false;
+            })->take($limit)->values();
+
+            return response()->json(['data' => $accounts]);
         }
 
-        return response()->json(['data' => $query->get()]);
+        return response()->json(['data' => $query->limit($limit)->get()]);
     }
 
     public function store(
@@ -115,7 +124,9 @@ class AccountController extends Controller
                 is_array($validated['custom_fields'] ?? null) ? $validated['custom_fields'] : [],
             );
             $validated['custom_fields'] = $cfValidator->validate(
-                'account', $merged, (int) $account->organization_id,
+                'account',
+                $merged,
+                (int) $account->organization_id,
             );
         }
 

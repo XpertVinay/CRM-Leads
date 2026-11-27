@@ -22,7 +22,7 @@ class FollowUpPolicy
     {
         $tenant = app(TenantContext::class)->getTenant();
 
-        return $tenant !== null && in_array($user->roleIn($tenant), TenantRole::values(), true);
+        return $tenant !== null && $user->hasPermissionIn($tenant, 'follow_ups.view');
     }
 
     public function view(User $user, FollowUp $followUp): bool
@@ -31,18 +31,14 @@ class FollowUpPolicy
 
         return $tenant !== null
             && (int) $followUp->organization_id === (int) $tenant->id
-            && in_array($user->roleIn($tenant), TenantRole::values(), true);
+            && $user->hasPermissionIn($tenant, 'follow_ups.view');
     }
 
     public function create(User $user): bool
     {
         $tenant = app(TenantContext::class)->getTenant();
 
-        return $tenant !== null && $user->hasRoleIn($tenant, [
-            TenantRole::OrgAdmin->value,
-            TenantRole::SalesManager->value,
-            TenantRole::SalesRep->value,
-        ]);
+        return $tenant !== null && $user->hasPermissionIn($tenant, 'follow_ups.create');
     }
 
     public function update(User $user, FollowUp $followUp): bool
@@ -53,12 +49,16 @@ class FollowUpPolicy
             return false;
         }
 
-        if ($user->hasRoleIn($tenant, [TenantRole::OrgAdmin->value, TenantRole::SalesManager->value])) {
-            return true;
+        if (! $user->hasPermissionIn($tenant, 'follow_ups.update')) {
+            return false;
         }
 
-        return $user->hasRoleIn($tenant, TenantRole::SalesRep->value)
-            && ((int) $followUp->assigned_user_id === (int) $user->id || (int) $followUp->created_by_user_id === (int) $user->id);
+        if ($user->hasRoleIn($tenant, TenantRole::SalesRep->value)) {
+            return (int) $followUp->assigned_user_id === (int) $user->id
+                || (int) $followUp->created_by_user_id === (int) $user->id;
+        }
+
+        return true;
     }
 
     public function delete(User $user, FollowUp $followUp): bool
@@ -67,9 +67,6 @@ class FollowUpPolicy
 
         return $tenant !== null
             && (int) $followUp->organization_id === (int) $tenant->id
-            && $user->hasRoleIn($tenant, [
-                TenantRole::OrgAdmin->value,
-                TenantRole::SalesManager->value,
-            ]);
+            && $user->hasPermissionIn($tenant, 'follow_ups.delete');
     }
 }

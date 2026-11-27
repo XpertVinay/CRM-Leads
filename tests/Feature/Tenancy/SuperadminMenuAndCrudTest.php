@@ -41,13 +41,74 @@ class SuperadminMenuAndCrudTest extends TestCase
             ->get('/dashboard');
 
         $response->assertOk()
-            ->assertDontSee('href="'.route('accounts.index').'"', false)
-            ->assertDontSee('href="'.route('contacts.index').'"', false)
-            ->assertDontSee('href="'.route('organizations.index').'"', false)
-            ->assertDontSee('href="'.route('pipelines.index').'"', false)
+            ->assertSee('href="'.route('accounts.index').'"', false)
+            ->assertSee('href="'.route('contacts.index').'"', false)
+            ->assertSee('href="'.route('pipelines.index').'"', false)
             ->assertDontSee('href="'.route('whatsapp.chat').'"', false)
-            ->assertDontSee('href="'.route('whatsapp.settings').'"', false)
-            ->assertDontSee('href="'.route('audit-logs.index').'"', false);
+            ->assertSee('href="'.route('whatsapp.settings').'"', false)
+            ->assertSee('href="'.route('audit-logs.index').'"', false)
+            ->assertDontSee('href="'.route('organizations.index').'"', false)
+            ->assertDontSee('href="'.route('superadmin.rbac.index').'"', false)
+            ->assertDontSee('href="'.route('superadmin.menus.index').'"', false)
+            ->assertDontSee('href="'.route('coupons.index').'"', false);
+    }
+
+    public function test_superadmin_can_crud_roles_permissions_and_portal_menus(): void
+    {
+        $superadmin = User::factory()->create(['is_superadmin' => true]);
+        $admin = User::factory()->create(['is_superadmin' => false]);
+        $org = $this->createOrgWithMember($admin, 'org_admin');
+
+        // Non-superadmin gets 403 on menu CRUD
+        $this->actingAs($admin)
+            ->withSession(['active_organization_id' => $org->id])
+            ->get(route('superadmin.menus.index'))
+            ->assertStatus(403);
+
+        // Superadmin can create, update, and delete a custom role
+        $this->actingAs($superadmin)
+            ->withSession(['active_organization_id' => $org->id])
+            ->post(route('superadmin.rbac.roles.store'), [
+                'name' => 'Support Agent',
+                'slug' => 'support_agent',
+                'description' => 'Handles customer support',
+            ])
+            ->assertRedirect(route('superadmin.rbac.index'));
+
+        $role = \App\Modules\Tenancy\Models\RbacRole::query()->where('slug', 'support_agent')->firstOrFail();
+        $this->delete(route('superadmin.rbac.roles.destroy', $role))
+            ->assertRedirect(route('superadmin.rbac.index'));
+        $this->assertDatabaseMissing('rbac_roles', ['id' => $role->id]);
+
+        // Superadmin can create, update, and delete a portal menu
+        $this->post(route('superadmin.menus.store'), [
+            'label' => 'Custom Portal Link',
+            'route_name' => 'dashboard',
+            'route_pattern' => 'dashboard',
+            'icon' => 'star',
+            'permission_slug' => 'dashboard.view',
+            'section' => 'main',
+            'requires_org' => 1,
+            'is_active' => 1,
+            'sort_order' => 999,
+        ])->assertRedirect(route('superadmin.menus.index'));
+
+        $menu = \App\Modules\Tenancy\Models\RbacMenu::query()->where('label', 'Custom Portal Link')->firstOrFail();
+        $this->patch(route('superadmin.menus.update', $menu), [
+            'label' => 'Updated Portal Link',
+            'route_name' => 'dashboard',
+            'route_pattern' => 'dashboard',
+            'icon' => 'star',
+            'permission_slug' => 'dashboard.view',
+            'section' => 'main',
+            'requires_org' => 1,
+            'is_active' => 1,
+            'sort_order' => 999,
+        ])->assertRedirect(route('superadmin.menus.index'));
+
+        $this->assertSame('Updated Portal Link', $menu->fresh()->label);
+        $this->delete(route('superadmin.menus.destroy', $menu))->assertRedirect(route('superadmin.menus.index'));
+        $this->assertDatabaseMissing('rbac_menus', ['id' => $menu->id]);
     }
 
     public function test_sidebar_shows_all_six_menu_items_to_superadmin(): void
@@ -64,9 +125,108 @@ class SuperadminMenuAndCrudTest extends TestCase
             ->assertSee('href="'.route('contacts.index').'"', false)
             ->assertSee('href="'.route('organizations.index').'"', false)
             ->assertSee('href="'.route('pipelines.index').'"', false)
-            ->assertSee('href="'.route('whatsapp.chat').'"', false)
+            ->assertDontSee('href="'.route('whatsapp.chat').'"', false)
             ->assertSee('href="'.route('whatsapp.settings').'"', false)
-            ->assertSee('href="'.route('audit-logs.index').'"', false);
+            ->assertSee('href="'.route('audit-logs.index').'"', false)
+            ->assertSee('href="'.route('coupons.index').'"', false);
+
+        WhatsAppAccount::create([
+            'organization_id' => $org->id,
+            'waba_id' => 'waba_menu_test',
+            'phone_number_id' => 'pn_menu_test',
+            'display_phone_number' => '+919876540001',
+            'access_token_encrypted' => encrypt('token'),
+            'is_active' => true,
+            'status' => 'connected',
+        ]);
+
+        $this->actingAs($superadmin)
+            ->withSession(['active_organization_id' => $org->id, 'locale_selected' => true])
+            ->get('/dashboard')
+            ->assertOk()
+            ->assertSee('href="'.route('whatsapp.chat').'"', false);
+    }
+
+    public function test_whatsapp_chat_menu_is_hidden_until_org_admin_configures_whatsapp_api(): void
+    {
+        $admin = User::factory()->create(['is_superadmin' => false]);
+        $rep = User::factory()->create(['is_superadmin' => false]);
+        $org = $this->createOrgWithMember($admin, 'org_admin');
+        $org->users()->attach($rep->id, ['role' => 'sales_rep']);
+
+        // Hidden before WhatsApp API integration is configured
+        $this->actingAs($admin)
+            ->withSession(['active_organization_id' => $org->id, 'locale_selected' => true])
+            ->get('/dashboard')
+            ->assertOk()
+            ->assertDontSee('href="'.route('whatsapp.chat').'"', false)
+            ->assertSee('href="'.route('whatsapp.settings').'"', false);
+
+        $this->actingAs($rep)
+            ->withSession(['active_organization_id' => $org->id, 'locale_selected' => true])
+            ->get('/dashboard')
+            ->assertOk()
+            ->assertDontSee('href="'.route('whatsapp.chat').'"', false);
+
+        // Direct access to WhatsApp Chat and chat AJAX endpoints is also forbidden before setup
+        $this->actingAs($admin)
+            ->withSession(['active_organization_id' => $org->id, 'locale_selected' => true])
+            ->get('/whatsapp/chat')
+            ->assertStatus(403);
+        $this->getJson('/ajax/whatsapp/conversations')->assertStatus(403);
+
+        $this->actingAs($rep)
+            ->withSession(['active_organization_id' => $org->id, 'locale_selected' => true])
+            ->get('/whatsapp/chat')
+            ->assertStatus(403);
+
+        // Connect WhatsApp API as org admin -> visible and accessible for admin and rep
+        $this->actingAs($admin)
+            ->withSession(['active_organization_id' => $org->id, 'locale_selected' => true])
+            ->postJson('/ajax/whatsapp/connect', [
+                'waba_id' => 'waba_vis_001',
+                'phone_number_id' => 'pn_vis_001',
+                'display_phone_number' => '+919876543219',
+                'access_token' => 'EAAG_vis_token',
+            ])
+            ->assertCreated();
+
+        $this->actingAs($admin)
+            ->withSession(['active_organization_id' => $org->id, 'locale_selected' => true])
+            ->get('/dashboard')
+            ->assertOk()
+            ->assertSee('href="'.route('whatsapp.chat').'"', false);
+        $this->get('/whatsapp/chat')->assertOk();
+
+        $this->actingAs($rep)
+            ->withSession(['active_organization_id' => $org->id, 'locale_selected' => true])
+            ->get('/dashboard')
+            ->assertOk()
+            ->assertSee('href="'.route('whatsapp.chat').'"', false);
+        $this->get('/whatsapp/chat')->assertOk();
+
+        // Deny whatsapp.view for rep -> menu hidden and route forbidden even when connected
+        $waViewPerm = \App\Modules\Tenancy\Models\RbacPermission::query()->where('slug', 'whatsapp.view')->firstOrFail();
+        app(\App\Modules\Tenancy\Services\RbacService::class)->setUserOverride($org, $rep, $waViewPerm->id, false);
+        $this->actingAs($rep)
+            ->withSession(['active_organization_id' => $org->id, 'locale_selected' => true])
+            ->get('/dashboard')
+            ->assertOk()
+            ->assertDontSee('href="'.route('whatsapp.chat').'"', false);
+        $this->get('/whatsapp/chat')->assertStatus(403);
+
+        // Disconnect WhatsApp API -> hidden and forbidden again
+        $this->actingAs($admin)
+            ->withSession(['active_organization_id' => $org->id, 'locale_selected' => true])
+            ->deleteJson('/ajax/whatsapp/disconnect')
+            ->assertOk();
+
+        $this->actingAs($admin)
+            ->withSession(['active_organization_id' => $org->id, 'locale_selected' => true])
+            ->get('/dashboard')
+            ->assertOk()
+            ->assertDontSee('href="'.route('whatsapp.chat').'"', false);
+        $this->get('/whatsapp/chat')->assertStatus(403);
     }
 
     public function test_non_superadmin_cannot_access_superadmin_crud_endpoints(): void

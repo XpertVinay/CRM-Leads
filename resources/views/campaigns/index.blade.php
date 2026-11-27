@@ -8,7 +8,8 @@
             <h1 class="crm-page-title">Campaigns</h1>
             <p class="crm-muted">Track marketing campaigns, budgets, WhatsApp tracking links, and ROI.</p>
         </div>
-        <button type="button" class="crm-btn crm-btn-primary" onclick="CrmUi.openModal('#campaign-modal')">+ New Campaign</button>
+        <button type="button" class="crm-btn crm-btn-primary" onclick="CrmUi.openModal('#campaign-modal')">+ New
+            Campaign</button>
     </div>
 
     <div class="crm-card">
@@ -26,7 +27,9 @@
                 </tr>
             </thead>
             <tbody id="campaigns-tbody">
-                <tr><td colspan="8" class="crm-muted">Loading campaigns...</td></tr>
+                <tr>
+                    <td colspan="8" class="crm-muted">Loading campaigns...</td>
+                </tr>
             </tbody>
         </table>
     </div>
@@ -59,7 +62,8 @@
                     </div>
                 </div>
                 <div class="crm-form-row">
-                    <div class="crm-field"><label>Budget</label><input name="budget" type="number" step="0.01" min="0"></div>
+                    <div class="crm-field"><label>Budget</label><input name="budget" type="number" step="0.01" min="0">
+                    </div>
                     <div class="crm-field">
                         <label>Status</label>
                         <select name="status">
@@ -81,47 +85,47 @@
 @endsection
 
 @push('scripts')
-<script>
-$(function () {
-    function loadCampaigns() {
-        $.get('/ajax/campaigns', function (resp) {
-            var rows = resp.data || [];
-            if (!rows.length) {
-                $('#campaigns-tbody').html('<tr><td colspan="8" class="crm-muted">No campaigns yet.</td></tr>');
-                return;
+    <script>
+        $(function () {
+            function loadCampaigns() {
+                $.get('/ajax/campaigns', function (resp) {
+                    var rows = resp.data || [];
+                    if (!rows.length) {
+                        $('#campaigns-tbody').html('<tr><td colspan="8" class="crm-muted">No campaigns yet.</td></tr>');
+                        return;
+                    }
+                    var html = rows.map(function (c) {
+                        var m = c.metrics || {};
+                        return '<tr>' +
+                            '<td><a href="/campaigns/' + encodeURIComponent(c.id) + '"><strong>' + CRM.escapeHtml(c.name) + '</strong></a></td>' +
+                            '<td>' + CRM.escapeHtml(c.platform) + '</td>' +
+                            '<td>' + CRM.escapeHtml(c.type) + '</td>' +
+                            '<td><span class="crm-badge">' + CRM.escapeHtml(c.status) + '</span></td>' +
+                            '<td>' + (m.clicks || 0) + '</td>' +
+                            '<td>' + (m.leads || 0) + '</td>' +
+                            '<td>' + (m.won_deals || 0) + '</td>' +
+                            '<td>' + (m.conversion_rate || 0) + '%</td>' +
+                            '</tr>';
+                    }).join('');
+                    $('#campaigns-tbody').html(html);
+                });
             }
-            var html = rows.map(function (c) {
-                var m = c.metrics || {};
-                return '<tr>' +
-                    '<td><a href="/campaigns/' + c.id + '"><strong>' + $('<div>').text(c.name).html() + '</strong></a></td>' +
-                    '<td>' + c.platform + '</td>' +
-                    '<td>' + c.type + '</td>' +
-                    '<td><span class="crm-badge">' + c.status + '</span></td>' +
-                    '<td>' + (m.clicks || 0) + '</td>' +
-                    '<td>' + (m.leads || 0) + '</td>' +
-                    '<td>' + (m.won_deals || 0) + '</td>' +
-                    '<td>' + (m.conversion_rate || 0) + '%</td>' +
-                    '</tr>';
-            }).join('');
-            $('#campaigns-tbody').html(html);
-        });
-    }
 
-    $('#campaign-create-form').on('submit', function (e) {
-        e.preventDefault();
-        $.post('/ajax/campaigns', $(this).serialize())
-            .done(function () {
-                CrmUi.closeModal('#campaign-modal');
-                $('#campaign-create-form')[0].reset();
-                CrmUi.flash('Campaign created successfully.');
-                loadCampaigns();
-            })
-            .fail(function (xhr) {
-                CrmUi.renderErrors($('#campaign-form-errors'), xhr);
+            $('#campaign-create-form').on('submit', function (e) {
+                e.preventDefault();
+                $.post('/ajax/campaigns', $(this).serialize())
+                    .done(function () {
+                        CrmUi.closeModal('#campaign-modal');
+                        $('#campaign-create-form')[0].reset();
+                        CrmUi.flash('Campaign created successfully.');
+                        loadCampaigns();
+                    })
+                    .fail(function (xhr) {
+                        CrmUi.renderErrors($('#campaign-form-errors'), xhr);
+                    });
             });
-    });
 
-    loadCampaigns();
-});
-</script>
+            loadCampaigns();
+        });
+    </script>
 @endpush

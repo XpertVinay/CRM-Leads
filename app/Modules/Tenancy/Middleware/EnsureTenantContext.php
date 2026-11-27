@@ -4,6 +4,7 @@ namespace App\Modules\Tenancy\Middleware;
 
 use App\Models\Organization;
 use App\Models\User;
+use App\Modules\Communications\WhatsApp\Models\WhatsAppAccount;
 use App\Modules\Tenancy\Context\TenantContext;
 use Closure;
 use Illuminate\Http\Request;
@@ -36,8 +37,12 @@ class EnsureTenantContext
 
         $this->tenantContext->setTenant($organization);
 
+        $rbacService = app(\App\Modules\Tenancy\Services\RbacService::class);
         View::share('activeOrganization', $organization);
         View::share('activeRole', $user->roleIn($organization) ?? ($user->isSuperadmin() ? 'superadmin' : null));
+        View::share('activePermissions', $rbacService->getEffectivePermissions($user, $organization));
+        View::share('sidebarMenus', $rbacService->getSidebarMenus($user, $organization));
+        View::share('whatsappConfigured', WhatsAppAccount::isConfiguredForOrganization((int) $organization->id));
 
         return $next($request);
     }

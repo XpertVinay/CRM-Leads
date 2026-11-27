@@ -22,7 +22,7 @@ class CampaignPolicy
     {
         $tenant = app(TenantContext::class)->getTenant();
 
-        return $tenant !== null && in_array($user->roleIn($tenant), TenantRole::values(), true);
+        return $tenant !== null && $user->hasPermissionIn($tenant, 'campaigns.view');
     }
 
     public function view(User $user, Campaign $campaign): bool
@@ -31,17 +31,14 @@ class CampaignPolicy
 
         return $tenant !== null
             && (int) $campaign->organization_id === (int) $tenant->id
-            && in_array($user->roleIn($tenant), TenantRole::values(), true);
+            && $user->hasPermissionIn($tenant, 'campaigns.view');
     }
 
     public function create(User $user): bool
     {
         $tenant = app(TenantContext::class)->getTenant();
 
-        return $tenant !== null && $user->hasRoleIn($tenant, [
-            TenantRole::OrgAdmin->value,
-            TenantRole::SalesManager->value,
-        ]);
+        return $tenant !== null && $user->hasPermissionIn($tenant, 'campaigns.create');
     }
 
     public function update(User $user, Campaign $campaign): bool
@@ -50,14 +47,15 @@ class CampaignPolicy
 
         return $tenant !== null
             && (int) $campaign->organization_id === (int) $tenant->id
-            && $user->hasRoleIn($tenant, [
-                TenantRole::OrgAdmin->value,
-                TenantRole::SalesManager->value,
-            ]);
+            && $user->hasPermissionIn($tenant, 'campaigns.update');
     }
 
     public function delete(User $user, Campaign $campaign): bool
     {
-        return $this->update($user, $campaign);
+        $tenant = app(TenantContext::class)->getTenant();
+
+        return $tenant !== null
+            && (int) $campaign->organization_id === (int) $tenant->id
+            && $user->hasPermissionIn($tenant, 'campaigns.delete');
     }
 }

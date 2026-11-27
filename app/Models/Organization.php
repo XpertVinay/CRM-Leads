@@ -3,9 +3,12 @@
 namespace App\Models;
 
 use App\Modules\CustomFields\Models\CustomFieldDefinition;
+use App\Modules\Subscriptions\Models\Subscription;
 use App\Modules\Tenancy\Models\ApiToken;
 use App\Modules\Tenancy\Models\OrganizationInvitation;
 use App\Modules\Tenancy\Models\OrganizationSetting;
+use App\Support\Casts\EncryptedString;
+use App\Support\Security\HasBlindIndexes;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
@@ -16,7 +19,11 @@ use Illuminate\Support\Str;
 
 class Organization extends Model
 {
-    use HasFactory, SoftDeletes;
+    use HasBlindIndexes, HasFactory, SoftDeletes;
+
+    protected $hidden = [
+        'primary_contact_email_hash',
+    ];
 
     protected $fillable = [
         'uuid',
@@ -33,7 +40,15 @@ class Organization extends Model
     protected function casts(): array
     {
         return [
+            'primary_contact_email' => EncryptedString::class,
             'settings' => 'array',
+        ];
+    }
+
+    protected function blindIndexMap(): array
+    {
+        return [
+            'primary_contact_email' => ['column' => 'primary_contact_email_hash', 'type' => 'email'],
         ];
     }
 
@@ -75,7 +90,7 @@ class Organization extends Model
     public function users(): BelongsToMany
     {
         return $this->belongsToMany(User::class, 'organization_user')
-            ->withPivot('role')
+            ->withPivot(['role', 'invited_by_user_id'])
             ->withTimestamps();
     }
 
@@ -97,6 +112,16 @@ class Organization extends Model
     public function setting(): HasOne
     {
         return $this->hasOne(OrganizationSetting::class, 'organization_id');
+    }
+
+    public function subscriptions(): HasMany
+    {
+        return $this->hasMany(Subscription::class, 'organization_id');
+    }
+
+    public function latestSubscription(): HasOne
+    {
+        return $this->hasOne(Subscription::class, 'organization_id')->latestOfMany();
     }
 
     public function isActive(): bool

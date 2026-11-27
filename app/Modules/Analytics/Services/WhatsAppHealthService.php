@@ -12,19 +12,34 @@ class WhatsAppHealthService
      */
     public function metrics(): array
     {
-        $messages = WhatsAppMessage::all();
-        $outbound = $messages->where('direction', 'outbound');
-        $totalOutbound = $outbound->count();
-        $delivered = $outbound->whereIn('status', ['delivered', 'read'])->count();
-        $read = $outbound->where('status', 'read')->count();
-        $templateCount = $outbound->where('message_type', 'template')->count();
+        $msgAgg = WhatsAppMessage::query()
+            ->selectRaw("
+                COUNT(*) as total_messages,
+                SUM(CASE WHEN direction = 'outbound' THEN 1 ELSE 0 END) as outbound_count,
+                SUM(CASE WHEN direction = 'outbound' AND status IN ('delivered', 'read') THEN 1 ELSE 0 END) as delivered_count,
+                SUM(CASE WHEN direction = 'outbound' AND status = 'read' THEN 1 ELSE 0 END) as read_count,
+                SUM(CASE WHEN direction = 'outbound' AND message_type = 'template' THEN 1 ELSE 0 END) as template_messages_count
+            ")
+            ->first();
 
-        $conversations = WhatsAppConversation::all();
-        $activeWindows = $conversations->filter(fn (WhatsAppConversation $c) => $c->isWindowActive())->count();
-        $expiredWindows = $conversations->count() - $activeWindows;
+        $totalMessages = (int) ($msgAgg?->total_messages ?? 0);
+        $totalOutbound = (int) ($msgAgg?->outbound_count ?? 0);
+        $delivered = (int) ($msgAgg?->delivered_count ?? 0);
+        $read = (int) ($msgAgg?->read_count ?? 0);
+        $templateCount = (int) ($msgAgg?->template_messages_count ?? 0);
+
+        $cutoff = now()->subHours(24);
+        $convAgg = WhatsAppConversation::query()
+            ->selectRaw('COUNT(*) as total_conversations')
+            ->selectRaw('SUM(CASE WHEN last_inbound_at IS NOT NULL AND last_inbound_at >= ? THEN 1 ELSE 0 END) as active_windows_count', [$cutoff])
+            ->first();
+
+        $totalConversations = (int) ($convAgg?->total_conversations ?? 0);
+        $activeWindows = (int) ($convAgg?->active_windows_count ?? 0);
+        $expiredWindows = max(0, $totalConversations - $activeWindows);
 
         return [
-            'total_messages' => $messages->count(),
+            'total_messages' => $totalMessages,
             'outbound_count' => $totalOutbound,
             'delivered_count' => $delivered,
             'read_count' => $read,

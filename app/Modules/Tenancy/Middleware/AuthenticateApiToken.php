@@ -14,13 +14,14 @@ class AuthenticateApiToken
 {
     public function __construct(
         private readonly TenantContext $tenantContext,
-    ) {}
+    ) {
+    }
 
     public function handle(Request $request, Closure $next): Response
     {
         $bearer = $request->bearerToken();
 
-        if (! is_string($bearer) || trim($bearer) === '') {
+        if (!is_string($bearer) || trim($bearer) === '') {
             return response()->json(['message' => 'Missing Bearer token.'], 401);
         }
 
@@ -31,25 +32,25 @@ class AuthenticateApiToken
             ->where('token_hash', $hash)
             ->first();
 
-        if (! $apiToken || ! $apiToken->isValid()) {
+        if (!$apiToken || !$apiToken->isValid()) {
             return response()->json(['message' => 'Invalid or revoked API token.'], 401);
         }
 
         $organization = $apiToken->organization;
         $user = $apiToken->user;
 
-        if (! $organization || ! $organization->isActive() || ! $user) {
+        if (!$organization || !$organization->isActive() || !$user) {
             return response()->json(['message' => 'Token organization or user is inactive.'], 401);
         }
 
-        if (! $user->isSuperadmin() && $user->roleIn($organization) === null) {
+        if (!$user->isSuperadmin() && $user->roleIn($organization) === null) {
             return response()->json(['message' => 'User is no longer a member of this organization.'], 403);
         }
 
         $headerOrgId = $request->header('X-Organization-ID');
         if ($headerOrgId !== null && trim((string) $headerOrgId) !== '') {
             $trimmedHeaderOrgId = trim((string) $headerOrgId);
-            if (! ctype_digit($trimmedHeaderOrgId) || (int) $trimmedHeaderOrgId <= 0) {
+            if (!ctype_digit($trimmedHeaderOrgId) || (int) $trimmedHeaderOrgId <= 0) {
                 return response()->json(['message' => 'Invalid X-Organization-ID header.'], 403);
             }
 
@@ -58,10 +59,12 @@ class AuthenticateApiToken
             }
         }
 
-        $apiToken->forceFill(['last_used_at' => now()])->saveQuietly();
+        if ($apiToken->last_used_at === null || $apiToken->last_used_at->lt(now()->subMinutes(5))) {
+            $apiToken->forceFill(['last_used_at' => now()])->saveQuietly();
+        }
 
         Auth::setUser($user);
-        $request->setUserResolver(static fn () => $user);
+        $request->setUserResolver(static fn() => $user);
         $this->tenantContext->setTenant($organization);
 
         return $next($request);

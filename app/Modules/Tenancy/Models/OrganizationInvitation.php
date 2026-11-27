@@ -4,14 +4,21 @@ namespace App\Modules\Tenancy\Models;
 
 use App\Models\User;
 use App\Modules\Tenancy\Traits\BelongsToOrganization;
+use App\Support\Casts\EncryptedString;
+use App\Support\Security\HasBlindIndexes;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class OrganizationInvitation extends Model
 {
-    use BelongsToOrganization;
+    use BelongsToOrganization, HasBlindIndexes;
 
     protected $table = 'organization_invitations';
+
+    protected $hidden = [
+        'token_hash',
+        'email_hash',
+    ];
 
     protected $fillable = [
         'organization_id',
@@ -27,8 +34,18 @@ class OrganizationInvitation extends Model
     protected function casts(): array
     {
         return [
+            'email' => EncryptedString::class,
+            'token' => EncryptedString::class,
             'expires_at' => 'datetime',
             'accepted_at' => 'datetime',
+        ];
+    }
+
+    protected function blindIndexMap(): array
+    {
+        return [
+            'email' => ['column' => 'email_hash', 'type' => 'email'],
+            'token' => ['column' => 'token_hash', 'type' => 'token'],
         ];
     }
 

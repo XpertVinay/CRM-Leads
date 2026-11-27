@@ -61,7 +61,7 @@ class LocaleController extends Controller
         $cookieMinutes = (int) config('localization.cookie_minutes', 60 * 24 * 365);
         Cookie::queue($cookieName, $locale, $cookieMinutes);
 
-        if ($request->user()) {
+        if ($request->user() && $request->user()->locale !== $locale) {
             $request->user()->forceFill(['locale' => $locale])->save();
         }
     }

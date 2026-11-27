@@ -22,62 +22,40 @@ class PipelinePolicy
     {
         $tenant = app(TenantContext::class)->getTenant();
 
-        if ($tenant === null) {
-            return false;
-        }
-
-        return in_array($user->roleIn($tenant), TenantRole::values(), true);
+        return $tenant !== null && $user->hasPermissionIn($tenant, 'pipelines.view');
     }
 
     public function view(User $user, Pipeline $pipeline): bool
     {
         $tenant = app(TenantContext::class)->getTenant();
 
-        if ($tenant === null || (int) $pipeline->organization_id !== (int) $tenant->id) {
-            return false;
-        }
-
-        return in_array($user->roleIn($tenant), TenantRole::values(), true);
+        return $tenant !== null
+            && (int) $pipeline->organization_id === (int) $tenant->id
+            && $user->hasPermissionIn($tenant, 'pipelines.view');
     }
 
     public function create(User $user): bool
     {
         $tenant = app(TenantContext::class)->getTenant();
 
-        if ($tenant === null) {
-            return false;
-        }
-
-        return $user->hasRoleIn($tenant, [
-            TenantRole::OrgAdmin->value,
-            TenantRole::SalesManager->value,
-        ]);
+        return $tenant !== null && $user->hasPermissionIn($tenant, 'pipelines.create');
     }
 
     public function update(User $user, Pipeline $pipeline): bool
     {
         $tenant = app(TenantContext::class)->getTenant();
 
-        if ($tenant === null || (int) $pipeline->organization_id !== (int) $tenant->id) {
-            return false;
-        }
-
-        return $user->hasRoleIn($tenant, [
-            TenantRole::OrgAdmin->value,
-            TenantRole::SalesManager->value,
-        ]);
+        return $tenant !== null
+            && (int) $pipeline->organization_id === (int) $tenant->id
+            && $user->hasPermissionIn($tenant, 'pipelines.update');
     }
 
     public function delete(User $user, Pipeline $pipeline): bool
     {
         $tenant = app(TenantContext::class)->getTenant();
 
-        if ($tenant === null || (int) $pipeline->organization_id !== (int) $tenant->id) {
-            return false;
-        }
-
-        return $user->hasRoleIn($tenant, [
-            TenantRole::OrgAdmin->value,
-        ]);
+        return $tenant !== null
+            && (int) $pipeline->organization_id === (int) $tenant->id
+            && $user->hasPermissionIn($tenant, 'pipelines.delete');
     }
 }

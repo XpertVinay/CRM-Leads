@@ -1,7 +1,11 @@
 <?php
 
+use App\Http\Middleware\EnforceTransportSecurity;
 use App\Http\Middleware\SetLocale;
+use App\Modules\Communications\WhatsApp\Middleware\EnsureWhatsAppConfigured;
+use App\Modules\Subscriptions\Middleware\EnsureActiveSubscription;
 use App\Modules\Tenancy\Middleware\AuthenticateApiToken;
+use App\Modules\Tenancy\Middleware\AuthorizePermission;
 use App\Modules\Tenancy\Middleware\AuthorizeTenantRole;
 use App\Modules\Tenancy\Middleware\EnsureSuperadmin;
 use App\Modules\Tenancy\Middleware\EnsureTenantContext;
@@ -19,15 +23,26 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->web(prepend: [
+            EnforceTransportSecurity::class,
+        ]);
+
         $middleware->web(append: [
             SetLocale::class,
+        ]);
+
+        $middleware->api(prepend: [
+            EnforceTransportSecurity::class,
         ]);
 
         $middleware->alias([
             'tenant' => EnsureTenantContext::class,
             'tenant.role' => AuthorizeTenantRole::class,
+            'tenant.permission' => AuthorizePermission::class,
             'superadmin' => EnsureSuperadmin::class,
             'api.token' => AuthenticateApiToken::class,
+            'subscription.active' => EnsureActiveSubscription::class,
+            'whatsapp.configured' => EnsureWhatsAppConfigured::class,
         ]);
 
         $middleware->prependToPriorityList(
@@ -38,6 +53,11 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->appendToPriorityList(
             EnsureTenantContext::class,
             AuthorizeTenantRole::class,
+        );
+
+        $middleware->appendToPriorityList(
+            EnsureTenantContext::class,
+            AuthorizePermission::class,
         );
     })
     ->withExceptions(function (Exceptions $exceptions): void {

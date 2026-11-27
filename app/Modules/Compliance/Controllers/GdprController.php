@@ -63,11 +63,12 @@ class GdprController extends Controller
 
     public function storeAuditLog(Request $request, TenantContext $tenantContext): JsonResponse
     {
+        abort_unless($request->user()?->isSuperadmin(), 403);
+
         $validated = $request->validate([
             'action' => ['required', 'string', 'max:100'],
             'auditable_type' => ['nullable', 'string', 'max:100'],
             'auditable_id' => ['nullable', 'integer'],
-            'ip_address' => ['nullable', 'string', 'max:45'],
         ]);
 
         $log = AuditLog::create([
@@ -76,7 +77,7 @@ class GdprController extends Controller
             'action' => $validated['action'],
             'auditable_type' => $validated['auditable_type'] ?? null,
             'auditable_id' => $validated['auditable_id'] ?? null,
-            'ip_address' => $validated['ip_address'] ?? $request->ip(),
+            'ip_address' => $request->ip(),
         ]);
 
         return response()->json([
@@ -87,11 +88,12 @@ class GdprController extends Controller
 
     public function updateAuditLog(Request $request, AuditLog $auditLog): JsonResponse
     {
+        abort_unless($request->user()?->isSuperadmin(), 403);
+
         $validated = $request->validate([
             'action' => ['required', 'string', 'max:100'],
             'auditable_type' => ['nullable', 'string', 'max:100'],
             'auditable_id' => ['nullable', 'integer'],
-            'ip_address' => ['nullable', 'string', 'max:45'],
         ]);
 
         $auditLog->update($validated);
@@ -102,8 +104,10 @@ class GdprController extends Controller
         ]);
     }
 
-    public function destroyAuditLog(AuditLog $auditLog): JsonResponse
+    public function destroyAuditLog(Request $request, AuditLog $auditLog): JsonResponse
     {
+        abort_unless($request->user()?->isSuperadmin(), 403);
+
         $auditLog->delete();
 
         return response()->json(['message' => 'Audit log deleted.']);

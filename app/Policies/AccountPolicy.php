@@ -22,65 +22,40 @@ class AccountPolicy
     {
         $tenant = app(TenantContext::class)->getTenant();
 
-        if ($tenant === null) {
-            return false;
-        }
-
-        return in_array($user->roleIn($tenant), TenantRole::values(), true);
+        return $tenant !== null && $user->hasPermissionIn($tenant, 'accounts.view');
     }
 
     public function view(User $user, Account $account): bool
     {
         $tenant = app(TenantContext::class)->getTenant();
 
-        if ($tenant === null || (int) $account->organization_id !== (int) $tenant->id) {
-            return false;
-        }
-
-        return in_array($user->roleIn($tenant), TenantRole::values(), true);
+        return $tenant !== null
+            && (int) $account->organization_id === (int) $tenant->id
+            && $user->hasPermissionIn($tenant, 'accounts.view');
     }
 
     public function create(User $user): bool
     {
         $tenant = app(TenantContext::class)->getTenant();
 
-        if ($tenant === null) {
-            return false;
-        }
-
-        return $user->hasRoleIn($tenant, [
-            TenantRole::OrgAdmin->value,
-            TenantRole::SalesManager->value,
-            TenantRole::SalesRep->value,
-        ]);
+        return $tenant !== null && $user->hasPermissionIn($tenant, 'accounts.create');
     }
 
     public function update(User $user, Account $account): bool
     {
         $tenant = app(TenantContext::class)->getTenant();
 
-        if ($tenant === null || (int) $account->organization_id !== (int) $tenant->id) {
-            return false;
-        }
-
-        return $user->hasRoleIn($tenant, [
-            TenantRole::OrgAdmin->value,
-            TenantRole::SalesManager->value,
-            TenantRole::SalesRep->value,
-        ]);
+        return $tenant !== null
+            && (int) $account->organization_id === (int) $tenant->id
+            && $user->hasPermissionIn($tenant, 'accounts.update');
     }
 
     public function delete(User $user, Account $account): bool
     {
         $tenant = app(TenantContext::class)->getTenant();
 
-        if ($tenant === null || (int) $account->organization_id !== (int) $tenant->id) {
-            return false;
-        }
-
-        return $user->hasRoleIn($tenant, [
-            TenantRole::OrgAdmin->value,
-            TenantRole::SalesManager->value,
-        ]);
+        return $tenant !== null
+            && (int) $account->organization_id === (int) $tenant->id
+            && $user->hasPermissionIn($tenant, 'accounts.delete');
     }
 }

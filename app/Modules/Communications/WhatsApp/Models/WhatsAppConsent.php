@@ -4,14 +4,20 @@ namespace App\Modules\Communications\WhatsApp\Models;
 
 use App\Modules\Pipeline\Models\Contact;
 use App\Modules\Tenancy\Traits\BelongsToOrganization;
+use App\Support\Casts\EncryptedString;
+use App\Support\Security\HasBlindIndexes;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class WhatsAppConsent extends Model
 {
-    use BelongsToOrganization;
+    use BelongsToOrganization, HasBlindIndexes;
 
     protected $table = 'whatsapp_consents';
+
+    protected $hidden = [
+        'phone_hash',
+    ];
 
     protected $fillable = [
         'organization_id',
@@ -26,8 +32,17 @@ class WhatsAppConsent extends Model
     protected function casts(): array
     {
         return [
+            'phone' => EncryptedString::class,
+            'ip_address' => EncryptedString::class,
             'is_opted_in' => 'boolean',
             'consent_timestamp' => 'datetime',
+        ];
+    }
+
+    protected function blindIndexMap(): array
+    {
+        return [
+            'phone' => ['column' => 'phone_hash', 'type' => 'phone'],
         ];
     }
 

@@ -14,6 +14,9 @@ use App\Modules\Tenancy\Models\OrganizationSetting;
 use App\Modules\Tenancy\Traits\BelongsToOrganization;
 use App\Modules\Tracking\Models\Touchpoint;
 use App\Modules\Tracking\Models\TrackingLink;
+use App\Support\Casts\EncryptedArray;
+use App\Support\Casts\EncryptedString;
+use App\Support\Security\HasBlindIndexes;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -24,7 +27,12 @@ use Illuminate\Support\Str;
 
 class Lead extends Model
 {
-    use BelongsToOrganization, HasCustomFields, HasFactory, SoftDeletes;
+    use BelongsToOrganization, HasBlindIndexes, HasCustomFields, HasFactory, SoftDeletes;
+
+    protected $hidden = [
+        'email_hash',
+        'phone_hash',
+    ];
 
     public const TYPES = ['B2B', 'B2C'];
 
@@ -89,11 +97,26 @@ class Lead extends Model
     protected function casts(): array
     {
         return [
+            'first_name' => EncryptedString::class,
+            'last_name' => EncryptedString::class,
+            'email' => EncryptedString::class,
+            'phone' => EncryptedString::class,
+            'company_name' => EncryptedString::class,
+            'location' => EncryptedString::class,
+            'requirement' => EncryptedString::class,
             'employee_count' => 'integer',
             'duplicate_count' => 'integer',
             'last_inquiry_at' => 'datetime',
             'converted_at' => 'datetime',
-            'custom_fields' => 'array',
+            'custom_fields' => EncryptedArray::class,
+        ];
+    }
+
+    protected function blindIndexMap(): array
+    {
+        return [
+            'email' => ['column' => 'email_hash', 'type' => 'email'],
+            'phone' => ['column' => 'phone_hash', 'type' => 'phone'],
         ];
     }
 

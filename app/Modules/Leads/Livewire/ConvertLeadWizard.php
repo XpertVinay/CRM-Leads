@@ -101,7 +101,10 @@ class ConvertLeadWizard extends Component
     public function render(): View
     {
         $lead = $this->leadId !== null ? Lead::query()->find($this->leadId) : null;
-        $accounts = Account::query()->orderBy('name')->get();
+        $accounts = Account::query()
+            ->get()
+            ->sortBy('name', SORT_NATURAL | SORT_FLAG_CASE)
+            ->values();
         $pipelines = Pipeline::query()->with('stages')->orderByDesc('is_default')->orderBy('id')->get();
 
         return view('livewire.leads.convert-lead-wizard', [

@@ -528,7 +528,7 @@
                     </ul>
 
                     <div class="lp-plan-cta">
-                        <a href="{{ route('register') }}" class="lp-btn-hero lp-btn-secondary"
+                        <a href="{{ route('register', ['plan' => 'starter']) }}" class="lp-btn-hero lp-btn-secondary"
                             style="width:100%;justify-content:center;">
                             <span>{{ __('Choose Starter — ₹2,499/mo') }}</span>
                             <span class="material-symbols-outlined" style="font-size:18px;">arrow_forward</span>
@@ -574,7 +574,7 @@
                     </ul>
 
                     <div class="lp-plan-cta">
-                        <a href="{{ route('register') }}" class="lp-btn-hero lp-btn-primary"
+                        <a href="{{ route('register', ['plan' => 'gold']) }}" class="lp-btn-hero lp-btn-primary"
                             style="width:100%;justify-content:center;">
                             <span>{{ __('Choose Gold — ₹4,999/mo') }}</span>
                             <span class="material-symbols-outlined" style="font-size:18px;">arrow_forward</span>

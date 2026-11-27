@@ -4,6 +4,8 @@ namespace App\Modules\Compliance\Models;
 
 use App\Models\User;
 use App\Modules\Tenancy\Traits\BelongsToOrganization;
+use App\Support\Casts\EncryptedArray;
+use App\Support\Casts\EncryptedString;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
@@ -32,8 +34,10 @@ class AuditLog extends Model
     protected function casts(): array
     {
         return [
-            'old_values' => 'array',
-            'new_values' => 'array',
+            'old_values' => EncryptedArray::class,
+            'new_values' => EncryptedArray::class,
+            'ip_address' => EncryptedString::class,
+            'user_agent' => EncryptedString::class,
             'created_at' => 'datetime',
         ];
     }

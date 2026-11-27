@@ -120,8 +120,8 @@ class LeadConversionService
         $normalizedName = trim($accountName);
         $existing = Account::withoutGlobalScope(OrganizationScope::class)
             ->where('organization_id', $organizationId)
-            ->whereRaw('LOWER(name) = ?', [Str::lower($normalizedName)])
-            ->first();
+            ->get()
+            ->first(fn (Account $account): bool => Str::lower(trim((string) $account->name)) === Str::lower($normalizedName));
 
         if ($existing !== null) {
             return $existing;

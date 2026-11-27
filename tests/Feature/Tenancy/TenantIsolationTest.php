@@ -45,7 +45,7 @@ class TenantIsolationTest extends TestCase
         $response->assertRedirect(route('dashboard'));
         $this->assertAuthenticated();
 
-        $user = User::query()->where('email', 'alice@acme.test')->firstOrFail();
+        $user = User::query()->whereBlindIndex('email_hash', 'alice@acme.test', 'email')->firstOrFail();
         $org = Organization::query()->where('name', 'Acme Holdings')->firstOrFail();
 
         $this->assertSame(TenantRole::OrgAdmin->value, $user->roleIn($org));
@@ -181,7 +181,9 @@ class TenantIsolationTest extends TestCase
         ])->assertRedirect(route('dashboard'));
 
         $this->assertAuthenticated();
-        $this->assertDatabaseHas('users', ['email' => 'admincase@example.com']);
+        $createdUser = User::query()->whereBlindIndex('email_hash', 'admincase@example.com', 'email')->first();
+        $this->assertNotNull($createdUser);
+        $this->assertSame('admincase@example.com', $createdUser->email);
 
         $this->post('/logout')->assertRedirect(route('login'));
 
@@ -194,7 +196,7 @@ class TenantIsolationTest extends TestCase
             'password_confirmation' => 'SecretPass123!',
         ])->assertRedirect()->assertSessionHasErrors('email');
 
-        $this->assertSame(1, User::query()->where('email', 'admincase@example.com')->count());
+        $this->assertSame(1, User::query()->whereBlindIndex('email_hash', 'admincase@example.com', 'email')->count());
 
         // Login with uppercase + surrounding whitespace succeeds
         $this->post('/login', [

@@ -12,7 +12,7 @@ class LocaleHelper
      */
     public static function normalize(?string $locale): ?string
     {
-        if (! is_string($locale) || trim($locale) === '') {
+        if (!is_string($locale) || trim($locale) === '') {
             return null;
         }
 
@@ -70,13 +70,13 @@ class LocaleHelper
             $lastThree = substr($intPart, -3);
             $rest = substr($intPart, 0, -3);
             $rest = preg_replace('/\B(?=(\d{2})+(?!\d))/', ',', $rest) ?? $rest;
-            $intPart = $rest.','.$lastThree;
+            $intPart = $rest . ',' . $lastThree;
         }
 
-        $result = $decimals > 0 ? $intPart.'.'.$decPart : $intPart;
-        $prefix = ($negative ? '-' : '').($withSymbol ? '₹' : '');
+        $result = $decimals > 0 ? $intPart . '.' . $decPart : $intPart;
+        $prefix = ($negative ? '-' : '') . ($withSymbol ? '₹' : '');
 
-        return $prefix.$result;
+        return $prefix . $result;
     }
 
     /**
@@ -92,6 +92,11 @@ class LocaleHelper
     }
 
     /**
+     * @var array<string, array<string, string>>
+     */
+    private static array $jsTranslationCache = [];
+
+    /**
      * Return the JS translation dictionary for the active locale.
      *
      * @return array<string, string>
@@ -101,13 +106,17 @@ class LocaleHelper
         $locale = self::normalize($locale ?? app()->getLocale())
             ?? config('localization.default', 'en_IN');
 
-        $path = lang_path($locale.'.json');
-        if (! is_file($path)) {
-            return [];
+        if (isset(self::$jsTranslationCache[$locale])) {
+            return self::$jsTranslationCache[$locale];
+        }
+
+        $path = lang_path($locale . '.json');
+        if (!is_file($path)) {
+            return self::$jsTranslationCache[$locale] = [];
         }
 
         $decoded = json_decode((string) file_get_contents($path), true);
 
-        return is_array($decoded) ? $decoded : [];
+        return self::$jsTranslationCache[$locale] = is_array($decoded) ? $decoded : [];
     }
 }

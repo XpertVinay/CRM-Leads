@@ -4,6 +4,8 @@ namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
 use App\Modules\Tenancy\Models\ApiToken;
+use App\Support\Casts\EncryptedString;
+use App\Support\Security\HasBlindIndexes;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -15,11 +17,18 @@ use Illuminate\Notifications\Notifiable;
 use Illuminate\Support\Facades\DB;
 
 #[Fillable(['name', 'email', 'password', 'phone', 'locale'])]
-#[Hidden(['password', 'remember_token'])]
+#[Hidden(['password', 'remember_token', 'is_superadmin', 'email_hash', 'phone_hash'])]
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, Notifiable;
+    use HasBlindIndexes, HasFactory, Notifiable;
+
+    /**
+     * Per-instance cache of organization_id => role lookups.
+     *
+     * @var array<int, ?string>
+     */
+    protected array $roleCache = [];
 
     /**
      * Get the attributes that should be cast.
@@ -29,16 +38,27 @@ class User extends Authenticatable
     protected function casts(): array
     {
         return [
+            'name' => EncryptedString::class,
+            'email' => EncryptedString::class,
+            'phone' => EncryptedString::class,
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'is_superadmin' => 'boolean',
         ];
     }
 
+    protected function blindIndexMap(): array
+    {
+        return [
+            'email' => ['column' => 'email_hash', 'type' => 'email'],
+            'phone' => ['column' => 'phone_hash', 'type' => 'phone'],
+        ];
+    }
+
     public function organizations(): BelongsToMany
     {
         return $this->belongsToMany(Organization::class, 'organization_user')
-            ->withPivot('role')
+            ->withPivot(['role', 'invited_by_user_id'])
             ->withTimestamps();
     }
 
@@ -53,10 +73,14 @@ class User extends Authenticatable
             return null;
         }
 
-        $organizationId = $organization instanceof Organization ? $organization->id : $organization;
+        $organizationId = (int) ($organization instanceof Organization ? $organization->id : $organization);
 
-        if (! $organizationId) {
+        if ($organizationId <= 0) {
             return null;
+        }
+
+        if (array_key_exists($organizationId, $this->roleCache)) {
+            return $this->roleCache[$organizationId];
         }
 
         $role = DB::table('organization_user')
@@ -64,7 +88,19 @@ class User extends Authenticatable
             ->where('user_id', $this->id)
             ->value('role');
 
-        return $role !== null ? (string) $role : null;
+        return $this->roleCache[$organizationId] = $role !== null ? (string) $role : null;
+    }
+
+    public function clearRoleCache(Organization|int|null $organization = null): void
+    {
+        if ($organization === null) {
+            $this->roleCache = [];
+
+            return;
+        }
+
+        $organizationId = (int) ($organization instanceof Organization ? $organization->id : $organization);
+        unset($this->roleCache[$organizationId]);
     }
 
     /**
@@ -81,6 +117,11 @@ class User extends Authenticatable
         $allowed = is_array($roles) ? $roles : [$roles];
 
         return in_array($role, $allowed, true);
+    }
+
+    public function hasPermissionIn(Organization|int|null $organization, string $permission): bool
+    {
+        return app(\App\Modules\Tenancy\Services\RbacService::class)->hasPermission($this, $organization, $permission);
     }
 
     public function isSuperadmin(): bool

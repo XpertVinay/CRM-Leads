@@ -34,17 +34,17 @@ class OrganizationPolicy
 
     public function update(User $user, Organization $organization): bool
     {
-        return $user->hasRoleIn($organization, TenantRole::OrgAdmin->value);
+        return $user->hasPermissionIn($organization, 'organization.settings');
     }
 
     public function manageTeam(User $user, Organization $organization): bool
     {
-        return $user->hasRoleIn($organization, TenantRole::OrgAdmin->value);
+        return $user->hasPermissionIn($organization, 'team.manage');
     }
 
     public function manageTokens(User $user, Organization $organization): bool
     {
-        return $user->hasRoleIn($organization, TenantRole::OrgAdmin->value);
+        return $user->hasPermissionIn($organization, 'tokens.manage');
     }
 
     public function delete(User $user, Organization $organization): bool

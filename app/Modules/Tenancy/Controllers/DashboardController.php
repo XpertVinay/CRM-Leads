@@ -27,7 +27,10 @@ class DashboardController extends Controller
             'role' => $user->roleIn($organization) ?? ($user->isSuperadmin() ? 'superadmin' : null),
             'metrics' => $metrics,
             'campaigns' => Campaign::query()->orderBy('name')->get(['id', 'name']),
-            'members' => $organization->users()->orderBy('users.name')->get(['users.id', 'users.name']),
+            'members' => $organization->users()
+                ->get(['users.id', 'users.name'])
+                ->sortBy('name', SORT_NATURAL | SORT_FLAG_CASE)
+                ->values(),
             'statuses' => Lead::PIPELINE_STATUSES,
         ]);
     }

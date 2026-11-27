@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Models\Organization;
+use App\Models\User;
 use App\Modules\Campaigns\Models\Campaign;
 use App\Modules\FollowUps\Models\FollowUp;
 use App\Modules\Analytics\Livewire\AttributionReportView;
@@ -46,8 +47,10 @@ use App\Modules\Pipeline\Services\DealStageTransitionService;
 use App\Modules\Pipeline\Services\StaleDealSlaService;
 use App\Modules\Tenancy\Context\TenantContext;
 use App\Modules\Tenancy\Livewire\OrganizationSwitcher;
+use App\Modules\Tenancy\Middleware\AuthorizePermission;
 use App\Modules\Tenancy\Middleware\AuthorizeTenantRole;
 use App\Modules\Tenancy\Middleware\EnsureTenantContext;
+use App\Modules\Tenancy\Services\RbacService;
 use App\Modules\Tenancy\Services\TenantProvisioningService;
 use App\Modules\Tracking\Livewire\TrackingLinkManager;
 use App\Modules\Tracking\Models\TrackingLink;
@@ -64,6 +67,9 @@ use App\Policies\OrganizationPolicy;
 use App\Policies\PipelinePolicy;
 use App\Policies\TrackingLinkPolicy;
 use App\Policies\WhatsAppPolicy;
+use App\Modules\Tenancy\Auth\EncryptedEloquentUserProvider;
+use App\Support\Security\DataEncrypter;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 use Livewire\Livewire;
@@ -75,7 +81,9 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
+        $this->app->singleton(DataEncrypter::class);
         $this->app->singleton(TenantContext::class);
+        $this->app->singleton(RbacService::class);
         $this->app->singleton(TenantProvisioningService::class);
         $this->app->singleton(CustomFieldRegistry::class);
         $this->app->singleton(CustomFieldValidationService::class);
@@ -106,6 +114,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        Auth::provider('encrypted-eloquent', function ($app, array $config) {
+            return new EncryptedEloquentUserProvider($app['hash'], $config['model']);
+        });
+
         Gate::policy(Organization::class, OrganizationPolicy::class);
         Gate::policy(CustomFieldDefinition::class, CustomFieldDefinitionPolicy::class);
         Gate::policy(TrackingLink::class, TrackingLinkPolicy::class);
@@ -119,10 +131,31 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(WhatsAppAccount::class, WhatsAppPolicy::class);
         Gate::policy(WhatsAppConversation::class, WhatsAppPolicy::class);
 
+        Gate::define('analytics.view', static function (User $user): bool {
+            if ($user->isSuperadmin()) {
+                return true;
+            }
+
+            $tenant = app(TenantContext::class)->getTenant();
+
+            return $tenant !== null && $user->hasPermissionIn($tenant, 'analytics.view');
+        });
+
+        Gate::define('reports.view', static function (User $user): bool {
+            if ($user->isSuperadmin()) {
+                return true;
+            }
+
+            $tenant = app(TenantContext::class)->getTenant();
+
+            return $tenant !== null && $user->hasPermissionIn($tenant, 'reports.view');
+        });
+
         if (class_exists(Livewire::class)) {
             Livewire::addPersistentMiddleware([
                 EnsureTenantContext::class,
                 AuthorizeTenantRole::class,
+                AuthorizePermission::class,
             ]);
 
             Livewire::component('tenancy.organization-switcher', OrganizationSwitcher::class);

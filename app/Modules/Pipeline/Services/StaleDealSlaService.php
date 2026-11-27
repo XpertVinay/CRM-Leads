@@ -31,26 +31,32 @@ class StaleDealSlaService
         foreach ($openStages as $stage) {
             $threshold = now()->subDays($stage->stale_days);
 
-            $staleDeals = Deal::withoutGlobalScope(OrganizationScope::class)
+            Deal::withoutGlobalScope(OrganizationScope::class)
+                ->with('assignedUser')
                 ->where('organization_id', $organizationId)
                 ->where('pipeline_stage_id', $stage->id)
                 ->where('is_stale', false)
                 ->whereNotNull('stage_entered_at')
                 ->where('stage_entered_at', '<', $threshold)
                 ->whereNull('closed_at')
-                ->get();
-
-            foreach ($staleDeals as $deal) {
-                $deal->update(['is_stale' => true]);
-                $flagged++;
-
-                if ($deal->assigned_user_id) {
-                    $owner = User::find($deal->assigned_user_id);
-                    if ($owner) {
-                        $owner->notify(new StaleDealSlaNotification($deal));
+                ->chunkById(100, function ($staleDeals) use (&$flagged): void {
+                    $ids = $staleDeals->pluck('id')->all();
+                    if ($ids === []) {
+                        return;
                     }
-                }
-            }
+
+                    Deal::withoutGlobalScope(OrganizationScope::class)
+                        ->whereIn('id', $ids)
+                        ->update(['is_stale' => true]);
+
+                    $flagged += count($ids);
+
+                    foreach ($staleDeals as $deal) {
+                        if ($deal->assignedUser) {
+                            $deal->assignedUser->notify(new StaleDealSlaNotification($deal));
+                        }
+                    }
+                });
         }
 
         return $flagged;

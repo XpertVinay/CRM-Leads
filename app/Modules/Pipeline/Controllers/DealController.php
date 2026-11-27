@@ -59,7 +59,9 @@ class DealController extends Controller
             $query->where('is_stale', true);
         }
 
-        return response()->json(['data' => $query->get()]);
+        $limit = min(max((int) $request->query('limit', 200), 1), 500);
+
+        return response()->json(['data' => $query->limit($limit)->get()]);
     }
 
     public function store(
@@ -69,13 +71,15 @@ class DealController extends Controller
     ): JsonResponse {
         Gate::authorize('create', Deal::class);
 
+        $tenantId = (int) $tenantContext->getTenantId();
+
         $validated = $request->validate([
             'title' => ['required', 'string', 'max:191'],
-            'pipeline_id' => ['nullable', 'integer'],
+            'pipeline_id' => ['nullable', 'integer', \App\Support\Validation\TenantValidationRules::existsInOrganization('pipelines', $tenantId, false)],
             'pipeline_stage_id' => ['nullable', 'integer'],
-            'contact_id' => ['required', 'integer'],
-            'account_id' => ['nullable', 'integer'],
-            'assigned_user_id' => ['nullable', 'integer'],
+            'contact_id' => ['required', 'integer', \App\Support\Validation\TenantValidationRules::existsInOrganization('contacts', $tenantId)],
+            'account_id' => ['nullable', 'integer', \App\Support\Validation\TenantValidationRules::existsInOrganization('accounts', $tenantId)],
+            'assigned_user_id' => ['nullable', 'integer', \App\Support\Validation\TenantValidationRules::organizationMemberExists($tenantId)],
             'amount' => ['nullable', 'numeric', 'min:0'],
             'currency' => ['nullable', 'string', 'size:3'],
             'expected_close_date' => ['nullable', 'date'],
@@ -93,11 +97,17 @@ class DealController extends Controller
                 ->orderBy('order_index')
                 ->firstOrFail();
             $validated['pipeline_stage_id'] = $firstStage->id;
+        } else {
+            \App\Modules\Pipeline\Models\PipelineStage::where('pipeline_id', $validated['pipeline_id'])
+                ->where('id', $validated['pipeline_stage_id'])
+                ->firstOrFail();
         }
 
         if (isset($validated['custom_fields'])) {
             $validated['custom_fields'] = $cfValidator->validate(
-                'deal', $validated['custom_fields'], (int) $tenantContext->getTenantId(),
+                'deal',
+                $validated['custom_fields'],
+                (int) $tenantContext->getTenantId(),
             );
         }
 
@@ -131,7 +141,7 @@ class DealController extends Controller
 
         $validated = $request->validate([
             'title' => ['sometimes', 'required', 'string', 'max:191'],
-            'assigned_user_id' => ['nullable', 'integer'],
+            'assigned_user_id' => ['nullable', 'integer', \App\Support\Validation\TenantValidationRules::organizationMemberExists((int) $deal->organization_id)],
             'amount' => ['nullable', 'numeric', 'min:0'],
             'currency' => ['nullable', 'string', 'size:3'],
             'expected_close_date' => ['nullable', 'date'],
@@ -144,7 +154,9 @@ class DealController extends Controller
                 is_array($validated['custom_fields'] ?? null) ? $validated['custom_fields'] : [],
             );
             $validated['custom_fields'] = $cfValidator->validate(
-                'deal', $merged, (int) $deal->organization_id,
+                'deal',
+                $merged,
+                (int) $deal->organization_id,
             );
         }
 

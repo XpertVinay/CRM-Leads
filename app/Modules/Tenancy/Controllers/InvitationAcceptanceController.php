@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use App\Modules\Tenancy\Models\OrganizationInvitation;
 use App\Modules\Tenancy\Scopes\OrganizationScope;
+use App\Support\Security\DataEncrypter;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -18,9 +19,10 @@ class InvitationAcceptanceController extends Controller
 {
     public function show(string $token): View
     {
+        $tokenHash = DataEncrypter::instance()->blindIndex($token, 'token');
         $invitation = OrganizationInvitation::withoutGlobalScope(OrganizationScope::class)
             ->with('organization')
-            ->where('token', $token)
+            ->where('token_hash', $tokenHash)
             ->firstOrFail();
 
         return view('auth.accept-invitation', [
@@ -30,9 +32,10 @@ class InvitationAcceptanceController extends Controller
 
     public function accept(Request $request, string $token): JsonResponse|RedirectResponse
     {
+        $tokenHash = DataEncrypter::instance()->blindIndex($token, 'token');
         $invitation = OrganizationInvitation::withoutGlobalScope(OrganizationScope::class)
             ->with('organization')
-            ->where('token', $token)
+            ->where('token_hash', $tokenHash)
             ->firstOrFail();
 
         if ($invitation->isAccepted()) {
@@ -44,7 +47,7 @@ class InvitationAcceptanceController extends Controller
         }
 
         $organization = $invitation->organization;
-        if (! $organization || ! $organization->isActive()) {
+        if (!$organization || !$organization->isActive()) {
             return $this->errorResponse($request, $token, 'Organization is not active.', 403, 'invitation');
         }
 
@@ -62,7 +65,7 @@ class InvitationAcceptanceController extends Controller
             }
         } else {
             $existing = User::query()
-                ->whereRaw('LOWER(email) = ?', [Str::lower($invitation->email)])
+                ->whereBlindIndex('email_hash', $invitation->email, 'email')
                 ->first();
 
             if ($existing instanceof User) {
@@ -70,7 +73,7 @@ class InvitationAcceptanceController extends Controller
                     'password' => ['required', 'string'],
                 ]);
 
-                if (! Auth::attempt(['email' => $existing->email, 'password' => $credentials['password']])) {
+                if (!Auth::attempt(['email' => $existing->email, 'password' => $credentials['password']])) {
                     return $this->errorResponse(
                         $request,
                         $token,
@@ -106,13 +109,24 @@ class InvitationAcceptanceController extends Controller
         }
 
         DB::transaction(function () use ($invitation, $organization, $user): void {
-            if ($user->roleIn($organization) === null) {
-                $organization->users()->attach($user->id, [
-                    'role' => $invitation->role,
-                ]);
+            $locked = OrganizationInvitation::withoutGlobalScope(OrganizationScope::class)
+                ->whereKey($invitation->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($locked->isAccepted() || $locked->isExpired()) {
+                abort(422, 'Invitation is no longer valid.');
             }
 
-            $invitation->update([
+            if ($user->roleIn($organization) === null) {
+                $organization->users()->attach($user->id, [
+                    'role' => $locked->role,
+                    'invited_by_user_id' => $locked->invited_by_user_id,
+                ]);
+                $user->clearRoleCache($organization);
+            }
+
+            $locked->update([
                 'accepted_at' => now(),
                 'accepted_by_user_id' => $user->id,
             ]);

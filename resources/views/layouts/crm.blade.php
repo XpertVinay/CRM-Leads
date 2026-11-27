@@ -30,108 +30,45 @@
                     <span>{{ config('app.name', 'Modular CRM') }}</span>
                 </div>
                 <nav class="crm-nav">
-                    <a href="{{ route('dashboard') }}" class="{{ request()->routeIs('dashboard') ? 'active' : '' }}">
-                        <span class="material-symbols-outlined">dashboard</span>
-                        <span>{{ __('Dashboard') }}</span>
-                    </a>
-                    @if(isset($activeOrganization))
-                        <a href="{{ route('leads.index') }}" class="{{ request()->routeIs('leads.*') ? 'active' : '' }}">
-                            <span class="material-symbols-outlined">inbox</span>
-                            <span>{{ __('Leads') }}</span>
-                        </a>
-                        <a href="{{ route('tracking-links.index') }}"
-                            class="{{ request()->routeIs('tracking-links.*') ? 'active' : '' }}">
-                            <span class="material-symbols-outlined">link</span>
-                            <span>{{ __('Tracking Links') }}</span>
-                        </a>
-                        <a href="{{ route('campaigns.index') }}"
-                            class="{{ request()->routeIs('campaigns.*') ? 'active' : '' }}">
-                            <span class="material-symbols-outlined">campaign</span>
-                            <span>{{ __('Campaigns') }}</span>
-                        </a>
-                        @if(in_array($activeRole ?? null, ['org_admin', 'superadmin'], true))
-                            <a href="{{ route('settings.team') }}"
-                                class="{{ request()->routeIs('settings.team') ? 'active' : '' }}">
-                                <span class="material-symbols-outlined">group</span>
-                                <span>{{ __('Employees') }}</span>
+                    @php
+                        $perms = $activePermissions ?? [];
+                        $canMenu = static fn (string $perm): bool => auth()->user()?->isSuperadmin() || in_array($perm, $perms, true);
+                        $isWhatsAppConfigured = $whatsappConfigured
+                            ?? (isset($activeOrganization) && \App\Modules\Communications\WhatsApp\Models\WhatsAppAccount::isConfiguredForOrganization((int) $activeOrganization->id));
+                        $menus = $sidebarMenus ?? app(\App\Modules\Tenancy\Services\RbacService::class)->getSidebarMenus(auth()->user(), $activeOrganization ?? null);
+                        $mainMenus = $menus->where('section', 'main');
+                        $pipelineMenus = $menus->where('section', 'pipeline');
+                        $superadminMenus = $menus->where('section', 'superadmin');
+                    @endphp
+                    @foreach($mainMenus as $menu)
+                        @if(\Illuminate\Support\Facades\Route::has($menu->route_name))
+                            <a href="{{ route($menu->route_name) }}" class="{{ request()->routeIs($menu->route_pattern) ? 'active' : '' }}">
+                                <span class="material-symbols-outlined">{{ $menu->icon }}</span>
+                                <span>{{ __($menu->label) }}</span>
                             </a>
                         @endif
-                        <a href="{{ route('follow-ups.index') }}"
-                            class="{{ request()->routeIs('follow-ups.*') ? 'active' : '' }}">
-                            <span class="material-symbols-outlined">event_upcoming</span>
-                            <span>{{ __('Follow-ups') }}</span>
-                        </a>
-                        <a href="{{ route('reports.index') }}" class="{{ request()->routeIs('reports.*') ? 'active' : '' }}">
-                            <span class="material-symbols-outlined">bar_chart</span>
-                            <span>{{ __('Reports') }}</span>
-                        </a>
-                        @if(in_array($activeRole ?? null, ['org_admin', 'superadmin'], true))
-                            <a href="{{ route('settings.organization') }}"
-                                class="{{ request()->routeIs('settings.organization') ? 'active' : '' }}">
-                                <span class="material-symbols-outlined">settings</span>
-                                <span>{{ __('Organization Settings') }}</span>
-                            </a>
-                        @endif
+                    @endforeach
+                    @if($pipelineMenus->isNotEmpty())
                         <div class="crm-nav-divider">{{ __('Pipeline & Channels') }}</div>
-                        @if(auth()->user()?->isSuperadmin())
-                            <a href="{{ route('accounts.index') }}" class="{{ request()->routeIs('accounts.*') ? 'active' : '' }}">
-                                <span class="material-symbols-outlined">business</span>
-                                <span>{{ __('Accounts') }}</span>
-                            </a>
-                            <a href="{{ route('contacts.index') }}" class="{{ request()->routeIs('contacts.*') ? 'active' : '' }}">
-                                <span class="material-symbols-outlined">contacts</span>
-                                <span>{{ __('Contacts') }}</span>
-                            </a>
-                        @endif
-                        <a href="{{ route('deals.index') }}" class="{{ request()->routeIs('deals.*') ? 'active' : '' }}">
-                            <span class="material-symbols-outlined">handshake</span>
-                            <span>{{ __('Deals') }}</span>
-                        </a>
-                        @if(auth()->user()?->isSuperadmin())
-                            <a href="{{ route('whatsapp.chat') }}"
-                                class="{{ request()->routeIs('whatsapp.chat') ? 'active' : '' }}">
-                                <span class="material-symbols-outlined">chat</span>
-                                <span>{{ __('WhatsApp Chat') }}</span>
-                            </a>
-                        @endif
-                        <a href="{{ route('analytics.executive') }}"
-                            class="{{ request()->routeIs('analytics.*') ? 'active' : '' }}">
-                            <span class="material-symbols-outlined">analytics</span>
-                            <span>{{ __('Analytics') }}</span>
-                        </a>
+                        @foreach($pipelineMenus as $menu)
+                            @if(\Illuminate\Support\Facades\Route::has($menu->route_name))
+                                <a href="{{ route($menu->route_name) }}" class="{{ request()->routeIs($menu->route_pattern) ? 'active' : '' }}">
+                                    <span class="material-symbols-outlined">{{ $menu->icon }}</span>
+                                    <span>{{ __($menu->label) }}</span>
+                                </a>
+                            @endif
+                        @endforeach
                     @endif
-                    @if(auth()->user()?->isSuperadmin())
-                        <a href="{{ route('organizations.index') }}"
-                            class="{{ request()->routeIs('organizations.*') ? 'active' : '' }}">
-                            <span class="material-symbols-outlined">corporate_fare</span>
-                            <span>{{ __('Organizations') }}</span>
-                        </a>
-                    @endif
-                    @if(isset($activeOrganization) && auth()->user()?->isSuperadmin())
-                        <a href="{{ route('pipelines.index') }}"
-                            class="{{ request()->routeIs('pipelines.*') ? 'active' : '' }}">
-                            <span class="material-symbols-outlined">view_kanban</span>
-                            <span>{{ __('Pipelines') }}</span>
-                        </a>
-                    @endif
-                    @if(isset($activeOrganization) && in_array($activeRole ?? null, ['org_admin', 'superadmin'], true))
-                        <a href="{{ route('settings.custom-fields') }}"
-                            class="{{ request()->routeIs('settings.custom-fields') ? 'active' : '' }}">
-                            <span class="material-symbols-outlined">tune</span>
-                            <span>{{ __('Custom Fields') }}</span>
-                        </a>
-                    @endif
-                    @if(isset($activeOrganization) && auth()->user()?->isSuperadmin())
-                        <a href="{{ route('whatsapp.settings') }}"
-                            class="{{ request()->routeIs('whatsapp.settings') ? 'active' : '' }}">
-                            <span class="material-symbols-outlined">api</span>
-                            <span>{{ __('WhatsApp API') }}</span>
-                        </a>
-                        <a href="{{ route('audit-logs.index') }}"
-                            class="{{ request()->routeIs('audit-logs.*') ? 'active' : '' }}">
-                            <span class="material-symbols-outlined">history</span>
-                            <span>{{ __('Audit Logs') }}</span>
-                        </a>
+                    @if($superadminMenus->isNotEmpty())
+                        <div class="crm-nav-divider">{{ __('Superadmin') }}</div>
+                        @foreach($superadminMenus as $menu)
+                            @if(\Illuminate\Support\Facades\Route::has($menu->route_name))
+                                <a href="{{ route($menu->route_name) }}" class="{{ request()->routeIs($menu->route_pattern) ? 'active' : '' }}">
+                                    <span class="material-symbols-outlined">{{ $menu->icon }}</span>
+                                    <span>{{ __($menu->label) }}</span>
+                                </a>
+                            @endif
+                        @endforeach
                     @endif
                 </nav>
             </aside>
@@ -204,15 +141,19 @@
                         <span>Home</span>
                     </a>
                     @if(isset($activeOrganization))
-                        <a href="{{ route('leads.index') }}" class="{{ request()->routeIs('leads.*') ? 'active' : '' }}">
-                            <span class="material-symbols-outlined">inbox</span>
-                            <span>Leads</span>
-                        </a>
-                        <a href="{{ route('deals.index') }}" class="{{ request()->routeIs('deals.*') ? 'active' : '' }}">
-                            <span class="material-symbols-outlined">handshake</span>
-                            <span>Deals</span>
-                        </a>
-                        @if(auth()->user()?->isSuperadmin())
+                        @if($canMenu('leads.view'))
+                            <a href="{{ route('leads.index') }}" class="{{ request()->routeIs('leads.*') ? 'active' : '' }}">
+                                <span class="material-symbols-outlined">inbox</span>
+                                <span>Leads</span>
+                            </a>
+                        @endif
+                        @if($canMenu('deals.view'))
+                            <a href="{{ route('deals.index') }}" class="{{ request()->routeIs('deals.*') ? 'active' : '' }}">
+                                <span class="material-symbols-outlined">handshake</span>
+                                <span>Deals</span>
+                            </a>
+                        @endif
+                        @if($isWhatsAppConfigured && $canMenu('whatsapp.view'))
                             <a href="{{ route('whatsapp.chat') }}"
                                 class="{{ request()->routeIs('whatsapp.chat') ? 'active' : '' }}">
                                 <span class="material-symbols-outlined">chat</span>

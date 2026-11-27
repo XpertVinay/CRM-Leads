@@ -7,6 +7,7 @@ use App\Modules\Communications\WhatsApp\Models\WhatsAppConversation;
 use App\Modules\Communications\WhatsApp\Models\WhatsAppMessage;
 use App\Modules\Pipeline\Models\Contact;
 use App\Modules\Tenancy\Scopes\OrganizationScope;
+use App\Support\Security\DataEncrypter;
 use Carbon\Carbon;
 
 class CoexistenceService
@@ -92,9 +93,13 @@ class CoexistenceService
     private function findOrCreateContact(int $organizationId, string $phone): Contact
     {
         $digits = ltrim($phone, '+');
+        $phoneHashes = array_values(array_unique(array_filter([
+            DataEncrypter::instance()->blindIndex($phone, 'phone'),
+            DataEncrypter::instance()->blindIndex($digits, 'phone'),
+        ])));
         $contact = Contact::withoutGlobalScope(OrganizationScope::class)
             ->where('organization_id', $organizationId)
-            ->whereIn('phone', [$phone, $digits])
+            ->whereIn('phone_hash', $phoneHashes)
             ->first();
 
         if ($contact) {

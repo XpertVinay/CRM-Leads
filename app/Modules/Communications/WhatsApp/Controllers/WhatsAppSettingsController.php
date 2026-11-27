@@ -41,8 +41,8 @@ class WhatsAppSettingsController extends Controller
 
         $validated = $request->validate([
             'code' => ['nullable', 'string'],
-            'waba_id' => ['required', 'string', 'max:100'],
-            'phone_number_id' => ['required', 'string', 'max:100'],
+            'waba_id' => ['required', 'string', 'max:100', 'regex:/^[A-Za-z0-9_-]+$/'],
+            'phone_number_id' => ['required', 'string', 'max:100', 'regex:/^[A-Za-z0-9_-]+$/'],
             'display_phone_number' => ['nullable', 'string', 'max:50'],
             'verified_name' => ['nullable', 'string', 'max:191'],
             'access_token' => ['nullable', 'string'],
@@ -55,7 +55,7 @@ class WhatsAppSettingsController extends Controller
         $verifiedName = $validated['verified_name'] ?? null;
         $qualityRating = null;
 
-        if (! empty($validated['code'])) {
+        if (!empty($validated['code'])) {
             $oauthData = $client->exchangeCodeForToken($validated['code']);
             $plainToken = (string) ($oauthData['access_token'] ?? '');
             if ($plainToken !== '') {
@@ -67,7 +67,7 @@ class WhatsAppSettingsController extends Controller
             }
         }
 
-        if (! is_string($plainToken) || trim($plainToken) === '') {
+        if (!is_string($plainToken) || trim($plainToken) === '') {
             throw ValidationException::withMessages([
                 'access_token' => ['Either an OAuth code or an access token is required.'],
             ]);
@@ -138,9 +138,9 @@ class WhatsAppSettingsController extends Controller
                 if ($compType === 'BODY') {
                     $bodyText = (string) ($component['text'] ?? '');
                     if (preg_match_all('/\{\{(\d+)\}\}/', $bodyText, $matches)) {
-                        $placeholders = array_map(static fn (string $n): string => "param_{$n}", $matches[1]);
+                        $placeholders = array_map(static fn(string $n): string => "param_{$n}", $matches[1]);
                     }
-                } elseif ($compType === 'HEADER' && ! empty($component['format'])) {
+                } elseif ($compType === 'HEADER' && !empty($component['format'])) {
                     $headerType = strtolower((string) $component['format']);
                 }
             }
@@ -201,8 +201,10 @@ class WhatsAppSettingsController extends Controller
 
     public function storeTemplate(Request $request, TenantContext $tenantContext): JsonResponse
     {
+        abort_unless($request->user()?->isSuperadmin(), 403);
+
         $account = WhatsAppAccount::first();
-        if (! $account) {
+        if (!$account) {
             return response()->json([
                 'message' => 'Connect a WhatsApp account before creating templates.',
             ], 422);
@@ -236,6 +238,8 @@ class WhatsAppSettingsController extends Controller
 
     public function updateTemplate(Request $request, WhatsAppTemplate $template): JsonResponse
     {
+        abort_unless($request->user()?->isSuperadmin(), 403);
+
         $validated = $request->validate([
             'name' => ['sometimes', 'required', 'string', 'max:191'],
             'language' => ['sometimes', 'required', 'string', 'max:32'],
@@ -252,8 +256,10 @@ class WhatsAppSettingsController extends Controller
         ]);
     }
 
-    public function destroyTemplate(WhatsAppTemplate $template): JsonResponse
+    public function destroyTemplate(Request $request, WhatsAppTemplate $template): JsonResponse
     {
+        abort_unless($request->user()?->isSuperadmin(), 403);
+
         $template->delete();
 
         return response()->json(['message' => 'Template deleted.']);

@@ -9,6 +9,7 @@ use App\Modules\Tenancy\Context\TenantContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\View\View;
 
@@ -39,23 +40,30 @@ class ContactController extends Controller
             ->withCount('deals')
             ->orderByDesc('id');
 
-        $search = $request->query('search');
-        if (is_string($search) && trim($search) !== '') {
-            $needle = '%' . strtolower(trim($search)) . '%';
-            $query->where(function ($q) use ($needle): void {
-                $q->whereRaw('LOWER(first_name) LIKE ?', [$needle])
-                    ->orWhereRaw('LOWER(COALESCE(last_name, \'\')) LIKE ?', [$needle])
-                    ->orWhereRaw('LOWER(COALESCE(email, \'\')) LIKE ?', [$needle])
-                    ->orWhereRaw('LOWER(COALESCE(phone, \'\')) LIKE ?', [$needle]);
-            });
-        }
-
         $accountId = $request->query('account_id');
         if (is_string($accountId) && ctype_digit($accountId)) {
             $query->where('account_id', (int) $accountId);
         }
 
-        return response()->json(['data' => $query->get()]);
+        $limit = min(max((int) $request->query('limit', 200), 1), 500);
+
+        $search = $request->query('search');
+        if (is_string($search) && trim($search) !== '') {
+            $needle = Str::lower(trim($search));
+            $contacts = $query->get()->filter(function (Contact $contact) use ($needle): bool {
+                foreach ([$contact->first_name, $contact->last_name, $contact->email, $contact->phone] as $value) {
+                    if (is_string($value) && $value !== '' && Str::contains(Str::lower($value), $needle)) {
+                        return true;
+                    }
+                }
+
+                return false;
+            })->take($limit)->values();
+
+            return response()->json(['data' => $contacts]);
+        }
+
+        return response()->json(['data' => $query->limit($limit)->get()]);
     }
 
     public function store(
@@ -65,12 +73,14 @@ class ContactController extends Controller
     ): JsonResponse {
         Gate::authorize('create', Contact::class);
 
+        $tenantId = (int) $tenantContext->getTenantId();
+
         $validated = $request->validate([
             'first_name' => ['required', 'string', 'max:100'],
             'last_name' => ['nullable', 'string', 'max:100'],
             'email' => ['nullable', 'email', 'max:191'],
             'phone' => ['nullable', 'string', 'max:50'],
-            'account_id' => ['nullable', 'integer'],
+            'account_id' => ['nullable', 'integer', \App\Support\Validation\TenantValidationRules::existsInOrganization('accounts', $tenantId)],
             'job_title' => ['nullable', 'string', 'max:100'],
             'preferred_channel' => ['nullable', 'string', Rule::in(Contact::PREFERRED_CHANNELS)],
             'custom_fields' => ['nullable', 'array'],
@@ -113,7 +123,7 @@ class ContactController extends Controller
             'last_name' => ['nullable', 'string', 'max:100'],
             'email' => ['nullable', 'email', 'max:191'],
             'phone' => ['nullable', 'string', 'max:50'],
-            'account_id' => ['nullable', 'integer'],
+            'account_id' => ['nullable', 'integer', \App\Support\Validation\TenantValidationRules::existsInOrganization('accounts', (int) $contact->organization_id)],
             'job_title' => ['nullable', 'string', 'max:100'],
             'preferred_channel' => ['nullable', 'string', Rule::in(Contact::PREFERRED_CHANNELS)],
             'custom_fields' => ['nullable', 'array'],
@@ -125,7 +135,9 @@ class ContactController extends Controller
                 is_array($validated['custom_fields'] ?? null) ? $validated['custom_fields'] : [],
             );
             $validated['custom_fields'] = $cfValidator->validate(
-                'contact', $merged, (int) $contact->organization_id,
+                'contact',
+                $merged,
+                (int) $contact->organization_id,
             );
         }
 

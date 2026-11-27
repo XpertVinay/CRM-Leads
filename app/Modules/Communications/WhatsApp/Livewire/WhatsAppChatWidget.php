@@ -36,6 +36,8 @@ class WhatsAppChatWidget extends Component
 
     public function selectConversation(int $id): void
     {
+        Gate::authorize('viewConversations', WhatsAppAccount::class);
+
         $this->conversationId = $id;
     }
 
@@ -50,6 +52,11 @@ class WhatsAppChatWidget extends Component
         app(ConsentService::class)->assertOptedIn((int) $conversation->organization_id, (int) $conversation->contact_id);
 
         $account = $conversation->account;
+        if (!$account || !$account->is_active) {
+            $this->addError('messageBody', 'WhatsApp account is not active.');
+
+            return;
+        }
         $result = app(MetaGraphApiClient::class)->sendTextMessage(
             $account->phone_number_id,
             $account->getPlainAccessToken(),
@@ -74,7 +81,11 @@ class WhatsAppChatWidget extends Component
 
     public function sendTemplate(): void
     {
-        $this->validate(['selectedTemplateId' => ['required', 'integer']]);
+        $this->validate([
+            'selectedTemplateId' => ['required', 'integer'],
+            'templateParams' => ['array', 'max:20'],
+            'templateParams.*' => ['string', 'max:1024'],
+        ]);
 
         $conversation = WhatsAppConversation::findOrFail($this->conversationId);
         Gate::authorize('sendMessage', $conversation);
@@ -107,9 +118,12 @@ class WhatsAppChatWidget extends Component
 
     public function render()
     {
+        Gate::authorize('viewConversations', WhatsAppAccount::class);
+
         $conversations = WhatsAppConversation::with('contact:id,first_name,last_name')
             ->orderByDesc('last_message_at')
             ->orderByDesc('id')
+            ->limit(100)
             ->get();
 
         $activeConversation = $this->conversationId

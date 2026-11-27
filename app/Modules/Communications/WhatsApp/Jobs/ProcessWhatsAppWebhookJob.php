@@ -14,6 +14,7 @@ use App\Modules\Pipeline\Models\Deal;
 use App\Modules\Tenancy\Context\TenantContext;
 use App\Modules\Tenancy\Scopes\OrganizationScope;
 use App\Modules\Tracking\Models\Touchpoint;
+use App\Support\Security\DataEncrypter;
 use Carbon\Carbon;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
@@ -107,9 +108,14 @@ class ProcessWhatsAppWebhookJob implements ShouldQueue
         $profileName = $contactsMap[$digits] ?? $contactsMap[$fromRaw] ?? 'WhatsApp User';
         $timestamp = isset($msg['timestamp']) ? Carbon::createFromTimestamp((int) $msg['timestamp']) : now();
 
+        $phoneHashes = array_values(array_unique(array_filter([
+            DataEncrypter::instance()->blindIndex($phone, 'phone'),
+            DataEncrypter::instance()->blindIndex($digits, 'phone'),
+        ])));
+
         $contact = Contact::withoutGlobalScope(OrganizationScope::class)
             ->where('organization_id', $account->organization_id)
-            ->whereIn('phone', [$phone, $digits])
+            ->whereIn('phone_hash', $phoneHashes)
             ->first();
 
         if (! $contact) {

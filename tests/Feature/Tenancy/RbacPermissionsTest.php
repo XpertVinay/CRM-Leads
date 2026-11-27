@@ -94,20 +94,54 @@ class RbacPermissionsTest extends TestCase
         ['organization' => $org, 'user' => $admin] = $this->createOrgWithUser(TenantRole::OrgAdmin->value);
         $secondMember = User::factory()->create();
         $this->addUserToOrg($org, $secondMember, TenantRole::SalesRep->value);
+        $superadmin = User::factory()->create(['is_superadmin' => true]);
 
         $this->actingAsOrgMember($admin, $org);
 
-        // Cannot demote or remove sole org_admin
+        // Org admin cannot demote an org_admin or promote to org_admin (403)
         $this->patchJson("/ajax/team/members/{$admin->id}/role", ['role' => TenantRole::SalesManager->value])
-            ->assertStatus(422);
+            ->assertStatus(403);
+        $this->patchJson("/ajax/team/members/{$secondMember->id}/role", ['role' => TenantRole::OrgAdmin->value])
+            ->assertStatus(403);
         $this->deleteJson("/ajax/team/members/{$admin->id}")
             ->assertStatus(422);
 
-        // Promote secondMember to org_admin, then first admin CAN be demoted
+        // Superadmin cannot demote the last org_admin (422), but can promote secondMember and then demote admin
+        $this->actingAsOrgMember($superadmin, $org);
+        $this->patchJson("/ajax/team/members/{$admin->id}/role", ['role' => TenantRole::SalesManager->value])
+            ->assertStatus(422);
         $this->patchJson("/ajax/team/members/{$secondMember->id}/role", ['role' => TenantRole::OrgAdmin->value])
             ->assertOk();
         $this->patchJson("/ajax/team/members/{$admin->id}/role", ['role' => TenantRole::SalesManager->value])
             ->assertOk();
+    }
+
+    public function test_org_admin_can_only_update_roles_for_employees_they_invited(): void
+    {
+        ['organization' => $org, 'user' => $adminA] = $this->createOrgWithUser(TenantRole::OrgAdmin->value);
+        $adminB = User::factory()->create();
+        $this->addUserToOrg($org, $adminB, TenantRole::OrgAdmin->value);
+
+        // Admin A invites Employee X
+        $this->actingAsOrgMember($adminA, $org);
+        $this->postJson('/ajax/team/members', [
+            'name' => 'Employee X',
+            'email' => 'emp-x@acme.test',
+            'password' => 'SecretPass123!',
+            'role' => TenantRole::SalesRep->value,
+        ])->assertStatus(201);
+        $empX = User::query()->whereBlindIndex('email_hash', 'emp-x@acme.test', 'email')->firstOrFail();
+
+        // Admin A can update Employee X's role to sales_manager
+        $this->patchJson("/ajax/team/members/{$empX->id}/role", [
+            'role' => TenantRole::SalesManager->value,
+        ])->assertOk();
+
+        // Admin B CANNOT update Employee X's role (403)
+        $this->actingAsOrgMember($adminB, $org);
+        $this->patchJson("/ajax/team/members/{$empX->id}/role", [
+            'role' => TenantRole::ReadOnly->value,
+        ])->assertStatus(403);
     }
 
     public function test_invitation_and_api_token_lifecycle(): void

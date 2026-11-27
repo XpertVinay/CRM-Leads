@@ -13,6 +13,12 @@ class WhatsAppPolicy
     public function before(User $user, string $ability): ?bool
     {
         if ($user->isSuperadmin()) {
+            if (in_array($ability, ['viewConversations', 'sendMessage', 'manageConsent'], true)) {
+                $tenant = app(TenantContext::class)->getTenant();
+
+                return $tenant !== null && WhatsAppAccount::isConfiguredForOrganization((int) $tenant->id);
+            }
+
             return true;
         }
 
@@ -23,29 +29,23 @@ class WhatsAppPolicy
     {
         $tenant = app(TenantContext::class)->getTenant();
 
-        if ($tenant === null) {
-            return false;
-        }
-
-        return $user->hasRoleIn($tenant, [TenantRole::OrgAdmin->value]);
+        return $tenant !== null && $user->hasPermissionIn($tenant, 'whatsapp.settings');
     }
 
     public function viewConversations(User $user): bool
     {
         $tenant = app(TenantContext::class)->getTenant();
 
-        if ($tenant === null) {
-            return false;
-        }
-
-        return in_array($user->roleIn($tenant), TenantRole::values(), true);
+        return $tenant !== null
+            && WhatsAppAccount::isConfiguredForOrganization((int) $tenant->id)
+            && $user->hasPermissionIn($tenant, 'whatsapp.view');
     }
 
     public function sendMessage(User $user, ?WhatsAppConversation $conversation = null): bool
     {
         $tenant = app(TenantContext::class)->getTenant();
 
-        if ($tenant === null) {
+        if ($tenant === null || ! WhatsAppAccount::isConfiguredForOrganization((int) $tenant->id)) {
             return false;
         }
 
@@ -53,11 +53,7 @@ class WhatsAppPolicy
             return false;
         }
 
-        return $user->hasRoleIn($tenant, [
-            TenantRole::OrgAdmin->value,
-            TenantRole::SalesManager->value,
-            TenantRole::SalesRep->value,
-        ]);
+        return $user->hasPermissionIn($tenant, 'whatsapp.send');
     }
 
     public function manageConsent(User $user): bool
@@ -69,10 +65,8 @@ class WhatsAppPolicy
     {
         $tenant = app(TenantContext::class)->getTenant();
 
-        if ($tenant === null || (int) $account->organization_id !== (int) $tenant->id) {
-            return false;
-        }
-
-        return $user->hasRoleIn($tenant, [TenantRole::OrgAdmin->value]);
+        return $tenant !== null
+            && (int) $account->organization_id === (int) $tenant->id
+            && $user->hasPermissionIn($tenant, 'whatsapp.settings');
     }
 }

@@ -58,7 +58,7 @@ class TrackingLinkController extends Controller
 
         $channel = $request->query('channel');
         if (is_string($channel) && $channel !== '') {
-            if (! in_array($channel, TrackingLink::CHANNELS, true)) {
+            if (!in_array($channel, TrackingLink::CHANNELS, true)) {
                 return response()->json(['message' => 'Invalid channel filter.'], 422);
             }
             $query->where('channel', $channel);
@@ -86,8 +86,10 @@ class TrackingLinkController extends Controller
     ): JsonResponse {
         Gate::authorize('create', TrackingLink::class);
 
+        $tenantId = (int) $tenantContext->getTenantId();
+
         $validated = $request->validate([
-            'campaign_id' => ['nullable', 'integer'],
+            'campaign_id' => ['nullable', 'integer', \App\Support\Validation\TenantValidationRules::existsInOrganization('campaigns', $tenantId)],
             'name' => ['required', 'string', 'max:191'],
             'code' => ['nullable', 'string', 'max:32', 'regex:/^[A-Za-z0-9_-]+$/', 'unique:tracking_links,code'],
             'slug' => ['nullable', 'string', 'max:100', 'regex:/^[A-Za-z0-9_-]+$/', 'unique:tracking_links,slug'],
@@ -127,7 +129,7 @@ class TrackingLinkController extends Controller
         Gate::authorize('update', $trackingLink);
 
         $validated = $request->validate([
-            'campaign_id' => ['nullable', 'integer'],
+            'campaign_id' => ['nullable', 'integer', \App\Support\Validation\TenantValidationRules::existsInOrganization('campaigns', (int) $trackingLink->organization_id)],
             'name' => ['sometimes', 'required', 'string', 'max:191'],
             'code' => ['sometimes', 'required', 'string', 'max:32', 'regex:/^[A-Za-z0-9_-]+$/', Rule::unique('tracking_links', 'code')->ignore($trackingLink->id)],
             'slug' => ['nullable', 'string', 'max:100', 'regex:/^[A-Za-z0-9_-]+$/', Rule::unique('tracking_links', 'slug')->ignore($trackingLink->id)],
@@ -156,10 +158,10 @@ class TrackingLinkController extends Controller
             if ($destinationUrl === '') {
                 $resolvedSlug = array_key_exists('slug', $validated) ? ($validated['slug'] ?: null) : $trackingLink->slug;
                 $resolvedCode = $validated['code'] ?? $trackingLink->code;
-                $validated['destination_url'] = url('/go/'.($resolvedSlug ?: $resolvedCode));
+                $validated['destination_url'] = url('/go/' . ($resolvedSlug ?: $resolvedCode));
             } else {
                 $scheme = strtolower((string) parse_url($destinationUrl, PHP_URL_SCHEME));
-                if (! in_array($scheme, ['http', 'https'], true)) {
+                if (!in_array($scheme, ['http', 'https'], true)) {
                     return response()->json([
                         'message' => 'Destination URL must use http or https.',
                         'errors' => ['destination_url' => ['Destination URL must use http or https.']],
@@ -211,7 +213,7 @@ class TrackingLinkController extends Controller
         Gate::authorize('viewAny', TrackingLink::class);
 
         $model = (string) $request->query('model', 'first_touch');
-        if (! in_array($model, AttributionCalculationService::MODELS, true)) {
+        if (!in_array($model, AttributionCalculationService::MODELS, true)) {
             return response()->json(['message' => 'Invalid attribution model.'], 422);
         }
 

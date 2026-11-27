@@ -17,7 +17,8 @@ class GdprComplianceService
 {
     public function __construct(
         private readonly AuditService $auditService,
-    ) {}
+    ) {
+    }
 
     /**
      * @return array<string, mixed>
@@ -87,7 +88,7 @@ class GdprComplianceService
         return DB::transaction(function () use ($contact): Contact {
             $oldEmail = $contact->email;
             $oldPhone = $contact->phone;
-            $redactedEmail = 'anonymized-'.$contact->id.'@redacted.invalid';
+            $redactedEmail = 'anonymized-' . $contact->id . '@redacted.invalid';
 
             $contact->update([
                 'first_name' => 'Anonymized',
@@ -117,7 +118,7 @@ class GdprComplianceService
                 $lead->update([
                     'first_name' => 'Anonymized',
                     'last_name' => null,
-                    'email' => 'anonymized-lead-'.$lead->id.'@redacted.invalid',
+                    'email' => 'anonymized-lead-' . $lead->id . '@redacted.invalid',
                     'phone' => null,
                     'custom_fields' => null,
                 ]);
@@ -129,10 +130,13 @@ class GdprComplianceService
                 ->where('contact_id', $contact->id)
                 ->get();
 
-            foreach ($conversations as $conv) {
-                $conv->update(['customer_phone' => 'redacted-'.$conv->id]);
+            $convIds = $conversations->pluck('id')->all();
+            if ($convIds !== []) {
+                foreach ($conversations as $conv) {
+                    $conv->update(['customer_phone' => 'redacted-' . $conv->id]);
+                }
                 WhatsAppMessage::withoutGlobalScope(OrganizationScope::class)
-                    ->where('whatsapp_conversation_id', $conv->id)
+                    ->whereIn('whatsapp_conversation_id', $convIds)
                     ->update(['body' => '[REDACTED]']);
             }
 
@@ -140,7 +144,7 @@ class GdprComplianceService
                 ->where('organization_id', $contact->organization_id)
                 ->where('contact_id', $contact->id)
                 ->update([
-                    'phone' => 'redacted-'.$contact->id,
+                    'phone' => 'redacted-' . $contact->id,
                     'ip_address' => null,
                 ]);
 
@@ -167,8 +171,8 @@ class GdprComplianceService
 
             // Deals (amount, closed_at) are intentionally preserved for financial/accounting integrity
             $this->auditService->record('gdpr_anonymize_contact', $contact, [
-                'email' => $oldEmail,
-                'phone' => $oldPhone,
+                'email_redacted' => $oldEmail !== null,
+                'phone_redacted' => $oldPhone !== null,
             ], [
                 'first_name' => 'Anonymized',
                 'email' => $redactedEmail,

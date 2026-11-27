@@ -18,6 +18,7 @@ use App\Modules\Pipeline\Models\Pipeline;
 use App\Modules\Tenancy\Context\TenantContext;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Str;
@@ -32,7 +33,10 @@ class LeadController extends Controller
         Gate::authorize('viewAny', Lead::class);
 
         $tenant = $tenantContext->getTenant();
-        $members = $tenant->users()->orderBy('users.name')->get();
+        $members = $tenant->users()
+            ->get()
+            ->sortBy('name', SORT_NATURAL | SORT_FLAG_CASE)
+            ->values();
         $customFields = CustomFieldDefinition::query()
             ->where('entity_type', 'lead')
             ->orderBy('order_index')
@@ -66,7 +70,10 @@ class LeadController extends Controller
         ]);
 
         $pipelines = Pipeline::query()->with('stages')->orderByDesc('is_default')->orderBy('id')->get();
-        $accounts = Account::query()->orderBy('name')->get();
+        $accounts = Account::query()
+            ->get()
+            ->sortBy('name', SORT_NATURAL | SORT_FLAG_CASE)
+            ->values();
 
         return view('leads.show', [
             'lead' => $lead,
@@ -84,7 +91,38 @@ class LeadController extends Controller
             return $query;
         }
 
+        $searchTerm = is_string($request->query('search')) ? Str::lower(trim((string) $request->query('search'))) : '';
         $perPage = $request->query('per_page');
+
+        if ($searchTerm !== '') {
+            $filtered = $query->get()->filter(fn (Lead $lead): bool => $this->matchesLeadSearch($lead, $searchTerm))->values();
+
+            if (is_string($perPage) && ctype_digit($perPage) && (int) $perPage > 0) {
+                $perPageInt = min((int) $perPage, 100);
+                $page = LengthAwarePaginator::resolveCurrentPage();
+                $paginator = new LengthAwarePaginator(
+                    $filtered->forPage($page, $perPageInt)->values(),
+                    $filtered->count(),
+                    $perPageInt,
+                    $page,
+                );
+
+                return response()->json([
+                    'data' => $paginator->items(),
+                    'meta' => [
+                        'current_page' => $paginator->currentPage(),
+                        'last_page' => $paginator->lastPage(),
+                        'per_page' => $paginator->perPage(),
+                        'total' => $paginator->total(),
+                    ],
+                ]);
+            }
+
+            return response()->json([
+                'data' => $filtered,
+            ]);
+        }
+
         if (is_string($perPage) && ctype_digit($perPage) && (int) $perPage > 0) {
             $paginator = $query->paginate(min((int) $perPage, 100));
 
@@ -111,7 +149,7 @@ class LeadController extends Controller
 
         $type = $request->query('type');
         if (is_string($type) && $type !== '') {
-            if (! in_array($type, Lead::TYPES, true)) {
+            if (!in_array($type, Lead::TYPES, true)) {
                 return response()->json(['message' => 'Invalid lead type filter.'], 422);
             }
             $query->where('type', $type);
@@ -119,7 +157,7 @@ class LeadController extends Controller
 
         $status = $request->query('status');
         if (is_string($status) && $status !== '') {
-            if (! in_array($status, Lead::STATUSES, true)) {
+            if (!in_array($status, Lead::STATUSES, true)) {
                 return response()->json(['message' => 'Invalid lead status filter.'], 422);
             }
             $query->where('status', $status);
@@ -127,7 +165,7 @@ class LeadController extends Controller
 
         $priority = $request->query('priority');
         if (is_string($priority) && $priority !== '') {
-            if (! in_array($priority, Lead::PRIORITIES, true)) {
+            if (!in_array($priority, Lead::PRIORITIES, true)) {
                 return response()->json(['message' => 'Invalid priority filter.'], 422);
             }
             $query->where('priority', $priority);
@@ -162,20 +200,6 @@ class LeadController extends Controller
             $query->whereDate('created_at', '<=', $dateTo);
         }
 
-        $search = $request->query('search');
-        if (is_string($search) && trim($search) !== '') {
-            $needle = '%'.Str::lower(trim($search)).'%';
-            $query->where(function ($q) use ($needle): void {
-                $q->whereRaw('LOWER(COALESCE(lead_reference, \'\')) LIKE ?', [$needle])
-                    ->orWhereRaw('LOWER(first_name) LIKE ?', [$needle])
-                    ->orWhereRaw('LOWER(COALESCE(last_name, \'\')) LIKE ?', [$needle])
-                    ->orWhereRaw('LOWER(COALESCE(email, \'\')) LIKE ?', [$needle])
-                    ->orWhereRaw('LOWER(COALESCE(phone, \'\')) LIKE ?', [$needle])
-                    ->orWhereRaw('LOWER(COALESCE(company_name, \'\')) LIKE ?', [$needle])
-                    ->orWhereRaw('LOWER(COALESCE(location, \'\')) LIKE ?', [$needle]);
-            });
-        }
-
         $allowedSorts = ['id', 'created_at', 'first_name', 'status', 'priority', 'source'];
         $sortBy = in_array($request->query('sort_by'), $allowedSorts, true) ? (string) $request->query('sort_by') : 'id';
         $sortDir = strtolower((string) $request->query('sort_dir')) === 'asc' ? 'asc' : 'desc';
@@ -208,7 +232,7 @@ class LeadController extends Controller
             'email' => ['nullable', 'email', 'max:191'],
             'phone' => ['nullable', 'string', 'max:50'],
             'company_name' => [
-                Rule::requiredIf(static fn (): bool => $request->input('type') === 'B2B'),
+                Rule::requiredIf(static fn(): bool => $request->input('type') === 'B2B'),
                 'nullable',
                 'string',
                 'max:191',
@@ -255,7 +279,7 @@ class LeadController extends Controller
             'email' => ['nullable', 'email', 'max:191'],
             'phone' => ['nullable', 'string', 'max:50'],
             'company_name' => [
-                Rule::requiredIf(static fn (): bool => $targetType === 'B2B' && $request->exists('company_name')),
+                Rule::requiredIf(static fn(): bool => $targetType === 'B2B' && $request->exists('company_name')),
                 'nullable',
                 'string',
                 'max:191',
@@ -409,7 +433,7 @@ class LeadController extends Controller
                 Gate::authorize('assign', $lead);
                 $assignmentService->assign($lead, isset($validated['assigned_user_id']) ? (int) $validated['assigned_user_id'] : null);
                 $updatedCount++;
-            } elseif ($validated['action'] === 'status' && ! empty($validated['status'])) {
+            } elseif ($validated['action'] === 'status' && !empty($validated['status'])) {
                 Gate::authorize('update', $lead);
                 $oldStatus = $lead->status;
                 if ($oldStatus !== $validated['status']) {
@@ -426,7 +450,7 @@ class LeadController extends Controller
                     });
                 }
                 $updatedCount++;
-            } elseif ($validated['action'] === 'priority' && ! empty($validated['priority'])) {
+            } elseif ($validated['action'] === 'priority' && !empty($validated['priority'])) {
                 Gate::authorize('update', $lead);
                 $lead->update(['priority' => $validated['priority']]);
                 $updatedCount++;
@@ -448,16 +472,29 @@ class LeadController extends Controller
             return $query;
         }
 
-        $leads = $query->get();
+        $searchTerm = is_string($request->query('search')) ? Str::lower(trim((string) $request->query('search'))) : '';
 
-        return response()->streamDownload(function () use ($leads): void {
+        return response()->streamDownload(function () use ($query, $searchTerm): void {
             $handle = fopen('php://output', 'w');
             fputcsv($handle, [
-                'Reference', 'Name', 'Phone', 'Email', 'Company', 'Type', 'Status', 'Priority', 'Source', 'Assigned To', 'Created At',
+                'Reference',
+                'Name',
+                'Phone',
+                'Email',
+                'Company',
+                'Type',
+                'Status',
+                'Priority',
+                'Source',
+                'Assigned To',
+                'Created At',
             ]);
 
-            foreach ($leads as $lead) {
-                fputcsv($handle, [
+            foreach ($query->lazy(500) as $lead) {
+                if ($searchTerm !== '' && ! $this->matchesLeadSearch($lead, $searchTerm)) {
+                    continue;
+                }
+                fputcsv($handle, \App\Support\Security\CsvSanitizer::sanitizeRow([
                     $lead->lead_reference ?? '',
                     $lead->fullName(),
                     $lead->phone ?? '',
@@ -469,12 +506,31 @@ class LeadController extends Controller
                     $lead->source,
                     $lead->assignedUser?->name ?? 'Unassigned',
                     $lead->created_at?->toIso8601String() ?? '',
-                ]);
+                ]));
             }
 
             fclose($handle);
-        }, 'leads-export-'.now()->format('Ymd-His').'.csv', [
+        }, 'leads-export-' . now()->format('Ymd-His') . '.csv', [
             'Content-Type' => 'text/csv; charset=UTF-8',
         ]);
+    }
+
+    private function matchesLeadSearch(Lead $lead, string $searchTerm): bool
+    {
+        foreach ([
+            $lead->lead_reference,
+            $lead->first_name,
+            $lead->last_name,
+            $lead->email,
+            $lead->phone,
+            $lead->company_name,
+            $lead->location,
+        ] as $value) {
+            if (is_string($value) && $value !== '' && Str::contains(Str::lower($value), $searchTerm)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

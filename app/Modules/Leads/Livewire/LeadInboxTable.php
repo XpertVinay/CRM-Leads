@@ -69,19 +69,31 @@ class LeadInboxTable extends Component
             $query->where('status', $this->statusFilter);
         }
 
-        if (trim($this->search) !== '') {
-            $needle = '%'.Str::lower(trim($this->search)).'%';
-            $query->where(function ($q) use ($needle): void {
-                $q->whereRaw('LOWER(first_name) LIKE ?', [$needle])
-                    ->orWhereRaw('LOWER(COALESCE(last_name, \'\')) LIKE ?', [$needle])
-                    ->orWhereRaw('LOWER(COALESCE(email, \'\')) LIKE ?', [$needle])
-                    ->orWhereRaw('LOWER(COALESCE(company_name, \'\')) LIKE ?', [$needle])
-                    ->orWhereRaw('LOWER(COALESCE(location, \'\')) LIKE ?', [$needle]);
-            });
+        $leads = $query->get();
+
+        $searchTerm = Str::lower(trim($this->search));
+        if ($searchTerm !== '') {
+            $leads = $leads->filter(function (Lead $lead) use ($searchTerm): bool {
+                foreach ([
+                    $lead->lead_reference,
+                    $lead->first_name,
+                    $lead->last_name,
+                    $lead->email,
+                    $lead->phone,
+                    $lead->company_name,
+                    $lead->location,
+                ] as $value) {
+                    if (is_string($value) && $value !== '' && Str::contains(Str::lower($value), $searchTerm)) {
+                        return true;
+                    }
+                }
+
+                return false;
+            })->values();
         }
 
         return view('livewire.leads.lead-inbox-table', [
-            'leads' => $query->get(),
+            'leads' => $leads,
             'types' => Lead::TYPES,
             'statuses' => Lead::STATUSES,
         ]);

@@ -3,6 +3,8 @@
 namespace App\Modules\Communications\WhatsApp\Models;
 
 use App\Modules\Tenancy\Traits\BelongsToOrganization;
+use App\Support\Casts\EncryptedArray;
+use App\Support\Casts\EncryptedString;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -29,8 +31,9 @@ class WhatsAppMessage extends Model
     protected function casts(): array
     {
         return [
+            'body' => EncryptedString::class,
             'is_coexistence_echo' => 'boolean',
-            'error_payload' => 'array',
+            'error_payload' => EncryptedArray::class,
             'sent_at' => 'datetime',
         ];
     }

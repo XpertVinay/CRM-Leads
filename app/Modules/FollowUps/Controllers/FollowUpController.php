@@ -23,7 +23,10 @@ class FollowUpController extends Controller
         Gate::authorize('viewAny', FollowUp::class);
 
         $tenant = $tenantContext->getTenant();
-        $members = $tenant->users()->orderBy('users.name')->get();
+        $members = $tenant->users()
+            ->get()
+            ->sortBy('name', SORT_NATURAL | SORT_FLAG_CASE)
+            ->values();
         $leads = Lead::query()->orderByDesc('id')->limit(200)->get(['id', 'lead_reference', 'first_name', 'last_name', 'phone']);
 
         return view('follow-ups.index', [

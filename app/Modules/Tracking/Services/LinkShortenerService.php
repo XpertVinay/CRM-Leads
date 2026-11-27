@@ -53,10 +53,10 @@ class LinkShortenerService
 
         $destinationUrl = trim((string) ($attributes['destination_url'] ?? ''));
         if ($destinationUrl === '') {
-            $destinationUrl = url('/go/'.($slug ?: $code));
+            $destinationUrl = url('/go/' . ($slug ?: $code));
         }
         $scheme = strtolower((string) parse_url($destinationUrl, PHP_URL_SCHEME));
-        if (! filter_var($destinationUrl, FILTER_VALIDATE_URL) || ! in_array($scheme, ['http', 'https'], true)) {
+        if (!filter_var($destinationUrl, FILTER_VALIDATE_URL) || !in_array($scheme, ['http', 'https'], true)) {
             throw ValidationException::withMessages([
                 'destination_url' => ['Destination URL must be a valid http or https URL.'],
             ]);
@@ -69,6 +69,21 @@ class LinkShortenerService
             app(LeadAssignmentService::class)->assertOrganizationMember($organizationId, $assignedUserId);
         }
 
+        $campaignId = isset($attributes['campaign_id']) && $attributes['campaign_id'] !== ''
+            ? (int) $attributes['campaign_id']
+            : null;
+        if ($campaignId !== null) {
+            $campaignExists = \App\Modules\Campaigns\Models\Campaign::withoutGlobalScope(OrganizationScope::class)
+                ->where('organization_id', $organizationId)
+                ->where('id', $campaignId)
+                ->exists();
+            if (!$campaignExists) {
+                throw ValidationException::withMessages([
+                    'campaign_id' => ['The selected campaign does not belong to this organization.'],
+                ]);
+            }
+        }
+
         $captureFieldIds = $this->sanitizeCaptureCustomFieldIds(
             $organizationId,
             $attributes['capture_custom_field_ids'] ?? null,
@@ -76,7 +91,7 @@ class LinkShortenerService
 
         return TrackingLink::create([
             'organization_id' => $organizationId,
-            'campaign_id' => $attributes['campaign_id'] ?? null,
+            'campaign_id' => $campaignId,
             'code' => Str::limit($code, 32, ''),
             'slug' => $slug !== '' ? $slug : null,
             'name' => trim((string) $attributes['name']),
@@ -105,13 +120,13 @@ class LinkShortenerService
      */
     public function sanitizeCaptureCustomFieldIds(int $organizationId, mixed $rawIds): ?array
     {
-        if (! is_array($rawIds) || $rawIds === []) {
+        if (!is_array($rawIds) || $rawIds === []) {
             return null;
         }
 
         $candidateIds = array_values(array_unique(array_filter(
             array_map('intval', $rawIds),
-            static fn (int $id): bool => $id > 0,
+            static fn(int $id): bool => $id > 0,
         )));
 
         if ($candidateIds === []) {
@@ -125,7 +140,7 @@ class LinkShortenerService
             ->orderBy('order_index')
             ->orderBy('id')
             ->pluck('id')
-            ->map(static fn ($id): int => (int) $id)
+            ->map(static fn($id): int => (int) $id)
             ->values()
             ->all();
 
@@ -144,7 +159,7 @@ class LinkShortenerService
     public function hashIp(string $ip, ?CarbonInterface $date = null): string
     {
         $day = ($date ?? now('UTC'))->toDateString();
-        $secret = (string) config('app.key').'|'.$day;
+        $secret = (string) config('app.key') . '|' . $day;
 
         return hash_hmac('sha256', $ip, $secret);
     }
@@ -156,7 +171,7 @@ class LinkShortenerService
         $rawIp = (string) ($request->ip() ?? '0.0.0.0');
         $ipHash = $this->hashIp($rawIp, $clickedAt->copy()->utc());
         $userAgent = $request->userAgent();
-        $visitorHash = hash_hmac('sha256', $rawIp.'|'.(string) $userAgent, (string) config('app.key'));
+        $visitorHash = hash_hmac('sha256', $rawIp . '|' . (string) $userAgent, (string) config('app.key'));
         $referer = $request->headers->get('referer');
         $captureIp = OrganizationSetting::forOrganization((int) $link->organization_id)->capture_ip_address;
         [$device, $browser] = $this->parseUserAgent(is_string($userAgent) ? $userAgent : '');
@@ -217,7 +232,7 @@ class LinkShortenerService
 
     private function nullableTrim(mixed $value): ?string
     {
-        if (! is_string($value)) {
+        if (!is_string($value)) {
             return null;
         }
 
@@ -242,8 +257,8 @@ class LinkShortenerService
         $browser = match (true) {
             str_contains($lower, 'whatsapp') => 'WhatsApp',
             str_contains($lower, 'edg') => 'Edge',
-            str_contains($lower, 'chrome') && ! str_contains($lower, 'edg') => 'Chrome',
-            str_contains($lower, 'safari') && ! str_contains($lower, 'chrome') => 'Safari',
+            str_contains($lower, 'chrome') && !str_contains($lower, 'edg') => 'Chrome',
+            str_contains($lower, 'safari') && !str_contains($lower, 'chrome') => 'Safari',
             str_contains($lower, 'firefox') => 'Firefox',
             default => 'Other',
         };

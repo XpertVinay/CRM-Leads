@@ -75,6 +75,15 @@
         closeModal: function (id) {
             $('#' + id).removeClass('open');
         },
+        escapeHtml: function (value) {
+            if (value === null || value === undefined) return '';
+            return String(value)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        },
         loadTimeline: function (selector) {
             var $el = $(selector);
             if (!$el.length) return;
@@ -83,13 +92,14 @@
             $.get('/ajax/activities', { activitable_type: type, activitable_id: id }, function (resp) {
                 var items = resp.data || [];
                 if (!items.length) {
-                    $el.html('<p class="crm-muted">' + window.CRM.t('No activities recorded yet.') + '</p>');
+                    $el.html('<p class="crm-muted">' + window.CRM.escapeHtml(window.CRM.t('No activities recorded yet.')) + '</p>');
                     return;
                 }
+                var esc = window.CRM.escapeHtml;
                 var html = items.map(function (a) {
                     var actor = a.user ? a.user.name : 'System';
                     var ts = a.created_at ? new Date(a.created_at).toLocaleString() : '';
-                    return '<div class="crm-list-item"><strong>' + a.action + '</strong> — ' + (a.description || '') + ' <span class="crm-muted">(' + actor + ', ' + ts + ')</span></div>';
+                    return '<div class="crm-list-item"><strong>' + esc(a.action) + '</strong> — ' + esc(a.description || '') + ' <span class="crm-muted">(' + esc(actor) + ', ' + esc(ts) + ')</span></div>';
                 }).join('');
                 $el.html(html);
             });

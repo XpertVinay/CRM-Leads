@@ -138,8 +138,11 @@ class WhatsAppIntegrationTest extends TestCase
             'organization_id' => $org->id,
             'meta_message_id' => 'wamid.IN1',
             'direction' => 'inbound',
-            'body' => 'Hi there',
         ]);
+        $inboundMsg = \App\Modules\Communications\WhatsApp\Models\WhatsAppMessage::withoutGlobalScopes()
+            ->where('meta_message_id', 'wamid.IN1')
+            ->firstOrFail();
+        $this->assertSame('Hi there', $inboundMsg->body);
 
         // Coexistence echo
         $echoPayload = json_encode([
@@ -261,5 +264,32 @@ class WhatsAppIntegrationTest extends TestCase
             ->assertSee('24h Window Expired');
         Livewire::test(TemplateSelector::class)
             ->assertSee('follow_up');
+    }
+
+    public function test_meta_graph_api_client_uses_guzzle_compatible_tls_options(): void
+    {
+        config([
+            'services.meta.graph_version' => 'v21.0',
+            'services.meta.graph_base_url' => 'https://graph.facebook.com',
+        ]);
+
+        $capturedOptions = [];
+        Http::fake(function ($request, array $options) use (&$capturedOptions) {
+            $capturedOptions[] = $options;
+
+            $curlFactory = new \GuzzleHttp\Handler\CurlFactory(1);
+            $easy = $curlFactory->create($request->toPsrRequest(), $options);
+            $curlFactory->release($easy);
+            $curlFactory->close();
+
+            return Http::response(['data' => []], 200);
+        });
+
+        $client = app(\App\Modules\Communications\WhatsApp\Adapters\MetaGraphApiClient::class);
+        $this->assertSame([], $client->fetchTemplates('123456', 'tok_test'));
+
+        $this->assertCount(1, $capturedOptions);
+        $this->assertSame(STREAM_CRYPTO_METHOD_TLSv1_2_CLIENT, $capturedOptions[0]['crypto_method'] ?? null);
+        $this->assertArrayNotHasKey(CURLOPT_SSLVERSION, $capturedOptions[0]['curl'] ?? []);
     }
 }

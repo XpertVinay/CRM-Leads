@@ -4,15 +4,21 @@ namespace App\Modules\Communications\WhatsApp\Models;
 
 use App\Modules\Pipeline\Models\Contact;
 use App\Modules\Tenancy\Traits\BelongsToOrganization;
+use App\Support\Casts\EncryptedString;
+use App\Support\Security\HasBlindIndexes;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class WhatsAppConversation extends Model
 {
-    use BelongsToOrganization;
+    use BelongsToOrganization, HasBlindIndexes;
 
     protected $table = 'whatsapp_conversations';
+
+    protected $hidden = [
+        'customer_phone_hash',
+    ];
 
     protected $fillable = [
         'organization_id',
@@ -28,8 +34,16 @@ class WhatsAppConversation extends Model
     protected function casts(): array
     {
         return [
+            'customer_phone' => EncryptedString::class,
             'last_inbound_at' => 'datetime',
             'last_message_at' => 'datetime',
+        ];
+    }
+
+    protected function blindIndexMap(): array
+    {
+        return [
+            'customer_phone' => ['column' => 'customer_phone_hash', 'type' => 'phone'],
         ];
     }
 

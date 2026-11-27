@@ -5,6 +5,9 @@ namespace App\Modules\Pipeline\Models;
 use App\Modules\CustomFields\Traits\HasCustomFields;
 use App\Modules\Tenancy\Traits\BelongsToOrganization;
 use App\Modules\Tracking\Models\Touchpoint;
+use App\Support\Casts\EncryptedArray;
+use App\Support\Casts\EncryptedString;
+use App\Support\Security\HasBlindIndexes;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -13,7 +16,12 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Contact extends Model
 {
-    use BelongsToOrganization, HasCustomFields, HasFactory, SoftDeletes;
+    use BelongsToOrganization, HasBlindIndexes, HasCustomFields, HasFactory, SoftDeletes;
+
+    protected $hidden = [
+        'email_hash',
+        'phone_hash',
+    ];
 
     public const PREFERRED_CHANNELS = ['whatsapp', 'email', 'phone'];
 
@@ -34,7 +42,20 @@ class Contact extends Model
     protected function casts(): array
     {
         return [
-            'custom_fields' => 'array',
+            'first_name' => EncryptedString::class,
+            'last_name' => EncryptedString::class,
+            'email' => EncryptedString::class,
+            'phone' => EncryptedString::class,
+            'job_title' => EncryptedString::class,
+            'custom_fields' => EncryptedArray::class,
+        ];
+    }
+
+    protected function blindIndexMap(): array
+    {
+        return [
+            'email' => ['column' => 'email_hash', 'type' => 'email'],
+            'phone' => ['column' => 'phone_hash', 'type' => 'phone'],
         ];
     }
 

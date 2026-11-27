@@ -8,8 +8,11 @@
             aria-label="Switch Organization"
         >
             @foreach($organizations as $org)
+                @php
+                    $roleLabel = $org->pivot?->role ?? ($user?->roleIn($org) ?? 'superadmin');
+                @endphp
                 <option value="{{ $org->id }}" {{ (int) $activeOrganizationId === (int) $org->id ? 'selected' : '' }}>
-                    {{ $org->name }} ({{ $org->pivot->role }})
+                    {{ $org->name }} ({{ $roleLabel }})
                 </option>
             @endforeach
         </select>

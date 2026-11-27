@@ -45,11 +45,14 @@ class OrganizationSwitcher extends Component
     {
         $user = Auth::user();
         $organizations = $user
-            ? $user->organizations()->where('organizations.status', 'active')->orderBy('organizations.id')->get()
+            ? ($user->isSuperadmin()
+                ? Organization::query()->where('status', 'active')->orderBy('id')->get()
+                : $user->organizations()->where('organizations.status', 'active')->orderBy('organizations.id')->get())
             : collect();
 
         return view('livewire.tenancy.organization-switcher', [
             'organizations' => $organizations,
+            'user' => $user,
         ]);
     }
 }

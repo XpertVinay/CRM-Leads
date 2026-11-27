@@ -12,7 +12,8 @@ class ROASAggregator
 {
     public function __construct(
         private readonly AttributionCalculationService $attributionService,
-    ) {}
+    ) {
+    }
 
     /**
      * @return array<string, mixed>
@@ -20,7 +21,7 @@ class ROASAggregator
     public function aggregate(string $model = 'last_touch'): array
     {
         $links = TrackingLink::orderByDesc('id')->get();
-        $wonDeals = Deal::whereHas('pipelineStage', fn ($q) => $q->where('category', 'won'))->get();
+        $wonDeals = Deal::whereHas('pipelineStage', fn($q) => $q->where('category', 'won'))->get();
 
         $attributedRevenueByLink = [];
         foreach ($wonDeals as $deal) {
@@ -41,17 +42,32 @@ class ROASAggregator
             'ad_spend' => 0.0,
         ];
 
+        $linkIds = $links->pluck('id')->all();
+
+        $clicksByLink = $linkIds !== []
+            ? LinkClick::query()
+                ->whereIn('tracking_link_id', $linkIds)
+                ->groupBy('tracking_link_id')
+                ->selectRaw('tracking_link_id, COUNT(*) as cnt')
+                ->pluck('cnt', 'tracking_link_id')
+            : collect();
+
+        $touchpointsByLink = $linkIds !== []
+            ? Touchpoint::query()
+                ->whereIn('tracking_link_id', $linkIds)
+                ->whereIn('event_milestone', ['lead_captured', 'conversation_qualified', 'deal_won'])
+                ->groupBy('tracking_link_id', 'event_milestone')
+                ->selectRaw('tracking_link_id, event_milestone, COUNT(*) as cnt')
+                ->get()
+                ->groupBy('tracking_link_id')
+            : collect();
+
         foreach ($links as $link) {
-            $clicks = LinkClick::where('tracking_link_id', $link->id)->count();
-            $leads = Touchpoint::where('tracking_link_id', $link->id)
-                ->where('event_milestone', 'lead_captured')
-                ->count();
-            $qualified = Touchpoint::where('tracking_link_id', $link->id)
-                ->where('event_milestone', 'conversation_qualified')
-                ->count();
-            $won = Touchpoint::where('tracking_link_id', $link->id)
-                ->where('event_milestone', 'deal_won')
-                ->count();
+            $clicks = (int) ($clicksByLink->get($link->id) ?? 0);
+            $linkTouchpoints = $touchpointsByLink->get($link->id, collect())->keyBy('event_milestone');
+            $leads = (int) ($linkTouchpoints->get('lead_captured')?->cnt ?? 0);
+            $qualified = (int) ($linkTouchpoints->get('conversation_qualified')?->cnt ?? 0);
+            $won = (int) ($linkTouchpoints->get('deal_won')?->cnt ?? 0);
 
             $revenue = round((float) ($attributedRevenueByLink[$link->id] ?? 0.0), 2);
             $adSpend = round((float) ($link->ad_spend ?? 0.0), 2);
